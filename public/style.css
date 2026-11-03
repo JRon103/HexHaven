@@ -160,10 +160,12 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .dock { grid-column: 1; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
 .hand { display: flex; gap: 6px; }
 .rcard { width: 54px; border-radius: 9px; padding: 6px 4px 5px; text-align: center; border: 1px solid rgba(0,0,0,.15); color: #2b2118; }
-.rcard .ico { font-size: 22px; line-height: 1.1; }
+.rcard .ico { font-size: 19px; width: 32px; height: 32px; margin: 0 auto 2px; display: grid; place-items: center; border-radius: 50%; background: #fffaf0; box-shadow: inset 0 0 0 2px var(--deep, rgba(0,0,0,.25)), 0 1px 2px rgba(0,0,0,.25); }
 .rcard .n { font-weight: 800; font-size: 17px; }
 .rcard .nm { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; opacity: .75; }
-.rcard.zero { opacity: .35; }
+/* none of this resource: neutral card + greyed icon, instead of fading the whole card into the panel */
+.rcard.zero { background: var(--panel-2) !important; border-style: dashed; color: var(--muted); }
+.rcard.zero .ico { filter: grayscale(1); opacity: .5; box-shadow: inset 0 0 0 2px var(--line); }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1; }
 .build { flex-direction: column; gap: 2px; padding: 6px 10px; min-width: 76px; }
 .build .cost { font-size: 11px; letter-spacing: -1px; font-weight: 400; }

@@ -3,12 +3,12 @@
 
 const RES = ['wood', 'clay', 'fleece', 'wheat', 'iron'];
 const RM = {
-  wood:   { name: 'Wood',   ico: '🌲', color: '#4f8a4f', card: '#a9d39a' },
-  clay:   { name: 'Clay',   ico: '🧱', color: '#c46a3c', card: '#eab394' },
-  fleece: { name: 'Fleece', ico: '🐑', color: '#a7cf6c', card: '#d8ecb8' },
-  wheat:  { name: 'Wheat',  ico: '🌾', color: '#e2bc45', card: '#f4e0a0' },
-  iron:   { name: 'Iron',   ico: '⛏️', color: '#8b939f', card: '#cfd4db' },
-  desert: { name: 'Dunes',  ico: '🏜️', color: '#dcc697' },
+  wood:   { name: 'Wood',   ico: '🌲', color: '#4f8a4f', card: '#a9d39a', deep: '#2e5e30' },
+  clay:   { name: 'Clay',   ico: '🧱', color: '#c46a3c', card: '#eab394', deep: '#8a3f1e' },
+  fleece: { name: 'Fleece', ico: '🐑', color: '#a7cf6c', card: '#d8ecb8', deep: '#5c8a2c' },
+  wheat:  { name: 'Wheat',  ico: '🌾', color: '#e2bc45', card: '#f4e0a0', deep: '#94700f' },
+  iron:   { name: 'Iron',   ico: '⛏️', color: '#8b939f', card: '#cfd4db', deep: '#4b535e' },
+  desert: { name: 'Dunes',  ico: '🏜️', color: '#dcc697', deep: '#97804d' },
 };
 const PC = {
   red: '#d6453d', blue: '#2f6bd6', ivory: '#f3ecd9', orange: '#ec8a1c',
@@ -542,7 +542,7 @@ function renderBoardStatic(v) {
   const w = (Math.max(...xs) - Math.min(...xs) + 2 * pad) * U, h = (Math.max(...ys) - Math.min(...ys) + 2 * pad) * U;
   S.vb0 = [minX, minY, w, h]; S.vb = S.vb0.slice();
   applyVB();
-  let out = '';
+  let out = '<defs><filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".35"/></filter></defs>';
   // harbors (behind tiles so docks tuck under the coast)
   for (const hb of b.harbors) {
     const E = b.edges[hb.edge]; const A = b.vertices[E.a]; const B = b.vertices[E.b];
@@ -552,13 +552,14 @@ function renderBoardStatic(v) {
   for (const hx of b.hexes) {
     out += `<polygon points="${hexPoints(v, hx)}" fill="${RM[hx.res].color}" stroke="#efdcae" stroke-width="4" stroke-linejoin="round"/>`;
     const cx = hx.x * U, cy = hx.y * U;
-    out += `<text x="${cx}" y="${cy - 25}" font-size="20" text-anchor="middle" dominant-baseline="central">${RM[hx.res].ico}</text>`;
+    out += `<circle cx="${cx}" cy="${cy - 24}" r="14" fill="#fffaf0" stroke="${RM[hx.res].deep}" stroke-width="2.5" filter="url(#plate-shadow)"/>`;
+    out += `<text x="${cx}" y="${cy - 23}" font-size="17" text-anchor="middle" dominant-baseline="central">${RM[hx.res].ico}</text>`;
     if (hx.num) {
       const red = hx.num === 6 || hx.num === 8;
-      out += `<circle cx="${cx}" cy="${cy + 4}" r="17" fill="#f8efd8" stroke="#8a7350" stroke-width="1.5"/>`;
-      out += `<text x="${cx}" y="${cy + 1}" font-size="${red ? 17 : 15}" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${red ? '#c0281c' : '#2b2118'}" font-family="Georgia,serif">${hx.num}</text>`;
+      out += `<circle cx="${cx}" cy="${cy + 9}" r="17" fill="#f8efd8" stroke="#8a7350" stroke-width="1.5"/>`;
+      out += `<text x="${cx}" y="${cy + 6}" font-size="${red ? 17 : 15}" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${red ? '#c0281c' : '#2b2118'}" font-family="Georgia,serif">${hx.num}</text>`;
       const n = PIPS[hx.num];
-      for (let i = 0; i < n; i++) out += `<circle cx="${cx + (i - (n - 1) / 2) * 4}" cy="${cy + 14}" r="1.5" fill="${red ? '#c0281c' : '#2b2118'}"/>`;
+      for (let i = 0; i < n; i++) out += `<circle cx="${cx + (i - (n - 1) / 2) * 4}" cy="${cy + 19}" r="1.5" fill="${red ? '#c0281c' : '#2b2118'}"/>`;
     }
   }
   for (const hb of b.harbors) {
@@ -588,7 +589,7 @@ function renderBoardDyn(v) {
   // highlight tiles that just produced
   if (v.turn.dice && v.status === 'playing') {
     const sum = v.turn.dice[0] + v.turn.dice[1];
-    for (const hx of b.hexes) if (hx.num === sum) out += `<circle cx="${hx.x * U}" cy="${hx.y * U + 4}" r="20" fill="none" stroke="#ffe08a" stroke-width="4" opacity="${hx.id === v.bandit ? .35 : .95}"/>`;
+    for (const hx of b.hexes) if (hx.num === sum) out += `<circle cx="${hx.x * U}" cy="${hx.y * U + 9}" r="20" fill="none" stroke="#ffe08a" stroke-width="4" opacity="${hx.id === v.bandit ? .35 : .95}"/>`;
   }
   // pieces placed in the last moment get an entrance animation; a negative delay keeps it
   // in step across re-renders so it never restarts
@@ -771,7 +772,7 @@ function renderDock(v) {
       ${k === 'vp' ? '<span class="hint">+1 VP</span>' : `<button class="btn small" data-play="${k}" ${canPlay && g.ready ? '' : 'disabled'} title="${g.ready ? '' : 'Bought this turn — play it next turn'}">Play</button>`}
     </span>`).join('');
   $('#dock').innerHTML = `
-    <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background:${RM[r].card}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
+    <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
     ${scrolls ? `<div class="scrolls">${scrolls}</div>` : ''}`;
