@@ -1,0 +1,14 @@
+{
+  "name": "hexhaven",
+  "version": "1.0.0",
+  "description": "Multiplayer hex island settling and trading game for 2-8 friends.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/sim.js 40 6"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,7 @@
+# Files Cloud Run doesn't need when building the game
+.gcloudignore
+.git
+.claude/
+data/
+test/
+node_modules/

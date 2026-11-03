@@ -1,0 +1,5 @@
+# saved rooms from local runs
+data/
+node_modules/
+.claude/
+*.log
