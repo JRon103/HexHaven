@@ -26,6 +26,12 @@ It prints a public `https://….trycloudflare.com` link. Share the room invite f
 
 **Over the internet (always-on):** deploy the folder to any Node host (Render, Railway, Fly.io, a VPS). Start command: `npm start`. The server reads `PORT` from the environment. Games are saved to `data/rooms.json`. Set `DATA_DIR` to a persistent disk if your host has one.
 
+## Live deployment
+
+The game runs on Google Cloud Run at https://hexhaven-401668287786.us-central1.run.app.
+
+Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the bot self-play tests and, if they pass, redeploys to Cloud Run. GitHub signs in to Google with Workload Identity Federation, so no keys are stored. Only this repository's workflows can deploy, using the `github-deployer` service account. A redeploy restarts the server, which ends any game in progress, so push between game nights.
+
 ## Rules summary
 
 | Piece   | Cost                          | Points |
