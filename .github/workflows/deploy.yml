@@ -18,21 +18,21 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
       - name: Bot self-play tests
         run: node test/sim.js 30 6 && node test/sim.js 15 8 && node test/sim.js 15 2
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/401668287786/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deployer@hexhaven-julian-2026.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       # Same settings as the first deploy. --max-instances 1 is required: all game state lives in one server.
       - name: Deploy
