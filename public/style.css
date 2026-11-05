@@ -105,6 +105,8 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .brand { font-family: var(--serif); font-size: 22px; font-weight: 700; }
 .roomtag { font-size: 13px; color: var(--muted); cursor: pointer; }
+.buildtag { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; cursor: help; white-space: nowrap; }
+.update-btn { position: fixed; right: 14px; bottom: 14px; z-index: 70; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
 .status { flex: 1; min-width: 200px; font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px; }
 .status .turnchip { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); flex: none; }
 .status.mine { color: var(--accent); }

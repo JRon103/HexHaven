@@ -4,7 +4,24 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execSync } = require('child_process');
 const G = require('./game');
+
+// Which code is running. On Cloud Run the deploy workflow passes APP_COMMIT / APP_BUILT and Cloud Run sets
+// K_REVISION; locally we ask git (and flag uncommitted changes as "+dirty").
+const BUILD = (() => {
+  const git = (cmd) => { try { return execSync(cmd, { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
+  const commit = process.env.APP_COMMIT || git('git rev-parse HEAD');
+  const dirty = !process.env.APP_COMMIT && git('git status --porcelain') !== '';
+  return {
+    version: require('./package.json').version,
+    commit: commit ? commit.slice(0, 7) + (dirty ? '+dirty' : '') : 'unknown',
+    built: process.env.APP_BUILT || null,
+    revision: process.env.K_REVISION || 'local',
+    startedAt: new Date().toISOString(),
+    node: process.version,
+  };
+})();
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
@@ -80,7 +97,7 @@ const STATIC = {
 };
 
 function json(res, status, obj) {
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Hexhaven-Build': BUILD.commit });
   res.end(JSON.stringify(obj));
 }
 
@@ -97,7 +114,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && STATIC[url.pathname]) {
       const [file, type] = STATIC[url.pathname];
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache', 'X-Hexhaven-Build': BUILD.commit });
+      if (file === 'index.html') {
+        // stamp the build onto the script/style URLs so no browser keeps a cached copy from an older deploy
+        const v = encodeURIComponent(BUILD.commit);
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8')
+          .replace('href="/style.css"', `href="/style.css?v=${v}"`).replace('src="/app.js"', `src="/app.js?v=${v}"`);
+        return res.end(html);
+      }
       return fs.createReadStream(path.join(PUBLIC, file)).pipe(res);
     }
 
@@ -117,6 +141,8 @@ const server = http.createServer(async (req, res) => {
       broadcast(g.code);
       return json(res, 200, { code: g.code, token: p.token, pid: p.id });
     }
+
+    if (req.method === 'GET' && url.pathname === '/api/version') return json(res, 200, BUILD);
 
     if (req.method === 'GET' && url.pathname === '/api/session') {
       const a = auth(url.searchParams.get('code'), url.searchParams.get('token'));
@@ -177,7 +203,8 @@ setInterval(() => {
 
 load();
 server.listen(PORT, () => {
-  console.log(`\nHexhaven is running!\n  On this computer:  http://localhost:${PORT}`);
+  console.log(`\nHexhaven is running!  build ${BUILD.commit} · v${BUILD.version} · revision ${BUILD.revision}${BUILD.built ? ` · built ${BUILD.built}` : ''} · node ${BUILD.node}`);
+  console.log(`  On this computer:  http://localhost:${PORT}`);
   for (const list of Object.values(os.networkInterfaces())) {
     for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  Same Wi-Fi:        http://${i.address}:${PORT}`);
   }

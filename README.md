@@ -32,6 +32,19 @@ The game runs on Google Cloud Run at https://hexhaven-401668287786.us-central1.r
 
 Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the bot self-play tests and, if they pass, redeploys to Cloud Run. GitHub signs in to Google with Workload Identity Federation, so no keys are stored. Only this repository's workflows can deploy, using the `github-deployer` service account. A redeploy restarts the server, which ends any game in progress, so push between game nights.
 
+### Which version is running?
+
+- In the game, the small **build** tag in the top bar (also on the home page and in the lobby) shows the commit. Hover it for the Cloud Run revision, build time and server start time.
+- The browser console prints `Hexhaven build <commit>` when the page loads.
+- `GET /api/version` returns the details, and every API response has an `X-Hexhaven-Build` header.
+- Running locally, the server prints the build at startup. `+dirty` means uncommitted changes.
+
+### Getting changes live
+
+- **Server:** every push to `main` deploys automatically, in about a minute. To redeploy without a code change, open the repo's **Actions** tab → *Deploy to Cloud Run* → **Run workflow** on `main`. Don't use **Re-run** on an old run: that deploys that older commit.
+- **Players' browsers:** an open page checks the build whenever it reconnects or the tab becomes visible again. If the server is newer, the page reloads itself once (your seat is kept). Script and style links carry the build ID, so browsers never use a stale cached copy.
+- A deploy restarts the server, which ends any game in progress.
+
 ## Rules summary
 
 | Piece   | Cost                          | Points |

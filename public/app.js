@@ -86,6 +86,7 @@ function connect() {
   S.prev = null;
   const es = new EventSource(`/api/stream?code=${encodeURIComponent(S.code)}&token=${encodeURIComponent(S.token)}`);
   S.es = es;
+  es.onopen = () => checkBuild(); // a reconnect after a deploy lands on new server code
   es.onmessage = (ev) => { S.v = JSON.parse(ev.data); setConn(true); render(); };
   es.onerror = async () => {
     setConn(false);
@@ -97,8 +98,44 @@ function connect() {
 }
 function setConn(ok) { const el = $('#conn'); if (el) el.textContent = ok ? '' : 'Reconnecting…'; }
 
+// ---------- build / version (for debugging, and to pick up new deploys) ----------
+async function loadBuild() {
+  try { const r = await fetch('/api/version', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch { return null; }
+}
+function buildTag() {
+  const b = S.build;
+  if (!b) return '';
+  const title = `Hexhaven v${b.version} · commit ${b.commit} · revision ${b.revision}${b.built ? ` · built ${b.built}` : ''} · server started ${b.startedAt}`;
+  return `<span class="buildtag" title="${esc(title)}">build ${esc(b.commit)}</span>`;
+}
+
+// If the server is now running different code than this page (it was redeployed), reload once to pick it up.
+// Your seat survives a reload; the guard stops a reload loop if something keeps the versions apart.
+async function checkBuild() {
+  const b = await loadBuild();
+  if (!b || !S.build || b.commit === S.build.commit) return;
+  console.warn(`Hexhaven: server is on build ${b.commit}, this page is ${S.build.commit}`);
+  let tried = null;
+  try { tried = sessionStorage.getItem('hexhaven:reloadedFor'); } catch {}
+  if (tried === b.commit) { showUpdateButton(b); return; }
+  try { sessionStorage.setItem('hexhaven:reloadedFor', b.commit); } catch {}
+  toast(`Updating to the new version (${b.commit})…`);
+  setTimeout(() => location.reload(), 1200);
+}
+function showUpdateButton(b) {
+  if ($('#update-btn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'update-btn'; btn.className = 'btn small primary update-btn';
+  btn.textContent = `⟳ New version (${b.commit}) — reload`;
+  btn.onclick = () => location.reload();
+  document.body.appendChild(btn);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkBuild(); });
+
 // ---------- boot ----------
 async function boot() {
+  S.build = await loadBuild();
+  if (S.build) console.info(`%cHexhaven build ${S.build.commit}%c  v${S.build.version} · revision ${S.build.revision}${S.build.built ? ` · built ${S.build.built}` : ''}`, 'font-weight:bold', '', S.build);
   const code = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
   if (code) {
     let sess = null;
@@ -153,6 +190,7 @@ function renderHome(prefill = '') {
         <span>🛤️ Road: 🌲🧱</span><span>🏠 Settlement: 🌲🧱🐑🌾</span><span>🏰 City: 🌾🌾⛏️⛏️⛏️</span><span>📜 Development card: 🐑🌾⛏️</span>
       </div>
     </div>
+    <p class="hint" style="text-align:center;margin-top:18px">${buildTag()}</p>
   </div>`;
   $('#f-create').onsubmit = async (e) => {
     e.preventDefault();
@@ -365,7 +403,7 @@ function renderLobby(v) {
     $('#app').innerHTML = `
     <div class="lobby">
       <div class="lobby-head">
-        <div><div class="hint">Room code</div><div class="room-code">${esc(v.code)}</div></div>
+        <div><div class="hint">Room code ${buildTag()}</div><div class="room-code">${esc(v.code)}</div></div>
         <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button></div>
       </div>
       <div class="card"><div id="lobby-main"></div></div>
@@ -596,7 +634,7 @@ function renderGame(v) {
     <div class="game">
       <header class="topbar">
         <span class="brand">Hexhaven</span>
-        <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>
+        <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>${buildTag()}
         <div class="status" id="status"></div>
         <span class="conn" id="conn"></span>
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
