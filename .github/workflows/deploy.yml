@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
 
       - name: Bot self-play tests
         run: node test/sim.js 30 6 && node test/sim.js 15 8 && node test/sim.js 15 2

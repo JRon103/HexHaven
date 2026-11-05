@@ -105,7 +105,10 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .brand { font-family: var(--serif); font-size: 22px; font-weight: 700; }
 .roomtag { font-size: 13px; color: var(--muted); cursor: pointer; }
-.buildtag { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; cursor: help; white-space: nowrap; }
+/* build tag: deliberately faint — it is for debugging, not for players */
+.buildtag { font: 10px ui-monospace, Consolas, monospace; color: var(--muted); opacity: .45; cursor: help; white-space: nowrap; transition: opacity .2s; }
+.buildtag:hover { opacity: 1; }
+.buildfoot { text-align: right; padding: 0 0 8px; }
 .update-btn { position: fixed; right: 14px; bottom: 14px; z-index: 70; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
 .status { flex: 1; min-width: 200px; font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px; }
 .status .turnchip { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); flex: none; }
@@ -299,8 +302,21 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 @keyframes blink { 50% { opacity: .55; } }
 .fresh { fill: none; stroke: #fff; stroke-width: 3; pointer-events: none; animation: fresh 4s ease-out forwards; }
 @keyframes fresh { 0%, 60% { opacity: .95; } 30% { opacity: .4; } 100% { opacity: 0; } }
-.timer { font-variant-numeric: tabular-nums; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
-.timer.low { background: #a8331f; color: #fff; border-color: #a8331f; }
+/* turn timer: a countdown pill in the top bar + a bar draining across the top of the board */
+.timer { display: inline-flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; padding: 5px 14px; border-radius: 99px; background: var(--panel-2); border: 2px solid var(--line); }
+.timer[hidden] { display: none; }
+.timer .t { font-weight: 800; font-size: 20px; }
+.timer .who { font-size: 13px; font-weight: 600; color: var(--muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timer.mine { border-color: var(--accent); color: var(--accent); }
+.timer.mine .who { color: var(--accent); }
+.timer.low { background: #b3261e; color: #fff; border-color: #b3261e; animation: tick 1s ease-in-out infinite; }
+.timer.low .who { color: #fff; }
+@keyframes tick { 50% { transform: scale(1.07); } }
+.timerbar { position: absolute; top: 0; left: 0; right: 0; height: 7px; background: rgba(0,0,0,.25); z-index: 4; }
+.timerbar[hidden] { display: none; }
+.timerbar > div { height: 100%; background: var(--c, var(--accent)); box-shadow: 0 0 10px var(--c, var(--accent)); transition: width .2s linear, background .3s; }
+.timerbar.low > div { background: #e33; box-shadow: 0 0 14px #e33; animation: blink .6s infinite; }
+@media (prefers-reduced-motion: reduce) { .timer.low, .timerbar.low > div { animation: none; } }
 .kbd { font: 11px var(--sans); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
 
 /* modal */

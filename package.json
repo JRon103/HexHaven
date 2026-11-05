@@ -8,7 +8,7 @@
     "test": "node test/sim.js 40 6"
   },
   "engines": {
-    "node": ">=18"
+    "node": "26.x"
   },
   "license": "MIT"
 }

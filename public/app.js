@@ -260,6 +260,7 @@ function noticeChanges(v) {
   const prev = S.prev;
   S.prev = cur;
   if (v.deadlineIn !== null && v.deadlineIn !== undefined) S.deadline = now + v.deadlineIn; else S.deadline = null;
+  S.deadlineTotal = v.deadlineTotal || null;
   if (!prev) return; // first view after (re)connecting: nothing "just happened"
   if (cur.needMe && !prev.needMe) chime('turn');
   else if (cur.trade && cur.trade !== prev.trade) chime('trade');
@@ -403,7 +404,7 @@ function renderLobby(v) {
     $('#app').innerHTML = `
     <div class="lobby">
       <div class="lobby-head">
-        <div><div class="hint">Room code ${buildTag()}</div><div class="room-code">${esc(v.code)}</div></div>
+        <div><div class="hint">Room code</div><div class="room-code">${esc(v.code)}</div></div>
         <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button></div>
       </div>
       <div class="card"><div id="lobby-main"></div></div>
@@ -634,7 +635,7 @@ function renderGame(v) {
     <div class="game">
       <header class="topbar">
         <span class="brand">Hexhaven</span>
-        <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>${buildTag()}
+        <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>
         <div class="status" id="status"></div>
         <span class="conn" id="conn"></span>
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
@@ -645,6 +646,7 @@ function renderGame(v) {
         <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="g-static"></g><g id="g-low"></g><g id="g-dyn"></g><g id="g-hint"></g></svg>
         <div class="board-legend" id="legend"></div>
         <div class="fx" id="fx" aria-live="polite"></div>
+        <div class="timerbar" id="timerbar" hidden aria-hidden="true"><div></div></div>
         <div class="seven-banner" id="seven-banner" role="status" hidden></div>
         <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
         <div class="zoomctl" role="group" aria-label="Map zoom">
@@ -663,6 +665,7 @@ function renderGame(v) {
           <div class="hint" id="bankinfo" style="margin-top:6px"></div></section>
         <section class="logsec"><h3>Log &amp; chat</h3><div class="log" id="log"></div>
           <form class="chatform" id="chat"><input type="text" maxlength="300" placeholder="Chat…" aria-label="Chat message"><button class="btn small">Send</button></form>
+          <div class="buildfoot">${buildTag()}</div>
         </section>
       </aside>
     </div>`;
@@ -1389,15 +1392,28 @@ function renderModal(v) {
   bd.onclick = (e) => { if (e.target === bd && ['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(kind)) closeModal(); };
 }
 
+// Turn timer: a countdown pill in the top bar ("0:42 · Marlo") plus a bar draining across the top of
+// the board in the color of whoever the clock is running for. Both go red in the last 10 seconds.
 setInterval(() => {
-  const el = $('#timer');
-  if (!el) return;
-  if (!S.deadline || !S.v || S.v.status !== 'playing') { el.hidden = true; return; }
-  const left = Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000));
-  el.hidden = false;
-  el.textContent = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  el.classList.toggle('low', left <= 10 && (S.v.stalled || []).includes(S.v.me));
-}, 250);
+  const el = $('#timer'); const bar = $('#timerbar');
+  if (!el || !bar) return;
+  const v = S.v;
+  if (!S.deadline || !v || v.status !== 'playing') { el.hidden = true; bar.hidden = true; return; }
+  const ms = Math.max(0, S.deadline - Date.now());
+  const left = Math.ceil(ms / 1000);
+  const waiting = v.stalled || [];
+  const mine = waiting.includes(v.me);
+  const who = mine ? 'your time' : waiting.length === 1 ? esc(pname(v, waiting[0])) : `${waiting.length} players`;
+  const low = left <= 10;
+  el.hidden = false; bar.hidden = false;
+  el.innerHTML = `<span class="t">⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</span><span class="who">${who}</span>`;
+  el.classList.toggle('mine', mine);
+  el.classList.toggle('low', low);
+  bar.classList.toggle('low', low);
+  const pct = S.deadlineTotal ? Math.min(100, (ms / S.deadlineTotal) * 100) : 100;
+  bar.firstElementChild.style.width = `${pct}%`;
+  bar.style.setProperty('--c', mine ? 'var(--accent)' : waiting.length === 1 ? pcolor(v, waiting[0]) : '#c9b48e');
+}, 200);
 
 // Shortcuts: R roll · E end turn / done building · T trade · B bank · 1–4 road/settlement/city/dev card · Esc cancel
 document.addEventListener('keydown', (e) => {

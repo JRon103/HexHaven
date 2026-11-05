@@ -966,7 +966,8 @@ function bump(game) {
   if (key !== game.stallKey) {
     game.stallKey = key;
     const long = t.phase === 'main' || t.phase === 'setup';
-    game.deadline = Date.now() + 1000 * (long ? secs : Math.min(secs, 60));
+    game.deadlineTotal = 1000 * (long ? secs : Math.min(secs, 60));
+    game.deadline = Date.now() + game.deadlineTotal;
   }
   return game;
 }
@@ -1048,6 +1049,7 @@ function viewFor(game, pid) {
       res: [game.lastSteal.thief, game.lastSteal.victim].includes(pid) ? game.lastSteal.res : null,
     } : null,
     deadlineIn: game.status === 'playing' && game.deadline ? Math.max(0, game.deadline - Date.now()) : null,
+    deadlineTotal: game.deadline ? game.deadlineTotal || null : null,
     hand: me ? me.hand : null,
     myScrolls: me ? me.scrolls.map((s) => ({ type: s.type, fresh: s.bought >= t.number })) : [],
     rates: me ? Object.fromEntries(RES.map((r) => [r, rate(game, pid, r)])) : null,
