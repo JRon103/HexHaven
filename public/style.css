@@ -105,8 +105,8 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .brand { font-family: var(--serif); font-size: 22px; font-weight: 700; }
 .roomtag { font-size: 13px; color: var(--muted); cursor: pointer; }
-.status { flex: 1; min-width: 200px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-.status .turnchip { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); }
+.status { flex: 1; min-width: 200px; font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.status .turnchip { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); flex: none; }
 .status.mine { color: var(--accent); }
 .dice { display: flex; gap: 6px; }
 .dice svg { width: 34px; height: 34px; }
@@ -198,7 +198,7 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .board-legend { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
 .board-legend span { background: rgba(255,250,240,.88); color: #2b2118; font-size: 12px; padding: 3px 8px; border-radius: 99px; }
 
-.dock { grid-column: 1; background: var(--panel); border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+.dock { grid-column: 1; background: var(--panel); border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
 .hand { display: flex; gap: 8px; }
 .rcard { width: 68px; border-radius: 11px; padding: 8px 4px 6px; text-align: center; border: 1px solid rgba(0,0,0,.15); color: #2b2118; }
 .rcard .ico { font-size: 24px; width: 42px; height: 42px; margin: 0 auto 3px; display: grid; place-items: center; border-radius: 50%; background: #fffaf0; box-shadow: inset 0 0 0 2px var(--deep, rgba(0,0,0,.25)), 0 1px 2px rgba(0,0,0,.25); }
@@ -247,6 +247,12 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .award { background: #f3d77a; color: #4a3a0a; border-color: #e1bf4f; }
 
 .tradebox { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 10px; display: grid; gap: 8px; font-size: 14px; }
+/* trade offers float over the board's top-left corner so nobody misses them */
+.trade-float { position: absolute; top: 10px; left: 10px; width: min(330px, calc(100% - 70px)); max-height: calc(100% - 60px); overflow: auto; z-index: 5; animation: slidein .3s ease-out; }
+.trade-float[hidden] { display: none; }
+.trade-float .tradebox { box-shadow: 0 8px 24px rgba(0,0,0,.35); border-width: 2px; font-size: 15px; }
+.trade-float .tradebox > b:first-child { font-size: 16px; }
+@keyframes slidein { from { transform: translateX(-20px); opacity: 0; } }
 .tradebox .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .resp { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 
@@ -337,3 +343,21 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
   .build .cost .c { font-size: 14px; padding: 1px; }
   .devcard { width: 100%; }
 }
+
+/* "whose turn" announcement across the top of the board */
+.turnfx { align-self: start; margin-top: 9%; display: flex; gap: 12px; align-items: center; background: rgba(255,250,240,.97); color: #2b2118;
+  padding: 12px 22px 12px 14px; border-radius: 16px; border: 3px solid var(--c); box-shadow: 0 10px 30px rgba(0,0,0,.35); animation: turnin .35s cubic-bezier(.3,1.5,.5,1); transition: opacity .4s, transform .4s; }
+.turnfx.out { opacity: 0; transform: translateY(-12px); }
+.turnfx-chip { width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 3px solid rgba(0,0,0,.3); flex: none; }
+.turnfx-title { font-family: var(--serif); font-size: 26px; font-weight: 700; line-height: 1.1; }
+.turnfx-sub { font-size: 14px; color: #7a6a58; }
+.turnfx.mine { border-width: 4px; box-shadow: 0 0 0 4px rgba(255,255,255,.6), 0 10px 30px rgba(0,0,0,.4); }
+.turnfx.mine .turnfx-title { font-size: 32px; color: var(--accent); }
+@keyframes turnin { from { transform: translateY(-24px) scale(.9); opacity: 0; } }
+
+/* trade dialog tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--line); }
+.tab { border: 0; background: none; padding: 8px 16px; font-weight: 700; cursor: pointer; border-radius: 8px 8px 0 0; color: var(--muted); margin-bottom: -2px; border-bottom: 3px solid transparent; }
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); background: var(--panel-2); }
+.stepper.locked { opacity: .45; }
+@media (max-width: 520px) { .turnfx-title { font-size: 20px; } .turnfx.mine .turnfx-title { font-size: 24px; } }

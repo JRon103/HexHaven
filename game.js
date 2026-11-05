@@ -688,13 +688,29 @@ function act(game, pid, a) {
       break;
     }
     case 'bankTrade': {
+      // Same shape as a player trade: { give: {res: n}, get: {res: n} }. Each resource you give must come in
+      // whole lots at your rate for it (4, or 3/2 at a harbor); every lot buys exactly one card.
       mustCur('main');
-      if (!RES.includes(a.give) || !RES.includes(a.get) || a.give === a.get) fail('Pick two different resources');
-      const k = rate(game, pid, a.give);
-      if (p.hand[a.give] < k) fail(`You need ${k} ${RES_NAME[a.give]}`);
-      if (game.bank[a.get] < 1) fail(`The bank is out of ${RES_NAME[a.get]}`);
-      p.hand[a.give] -= k; game.bank[a.give] += k; game.bank[a.get]--; p.hand[a.get]++;
-      log(game, `${p.name} traded ${k} ${RES_NAME[a.give]} to the bank for 1 ${RES_NAME[a.get]}.`);
+      let give, get;
+      if (typeof a.give === 'string') { // older single-card form: give one lot of a.give for 1 a.get
+        if (!RES.includes(a.give) || !RES.includes(a.get)) fail('Pick two different resources');
+        give = emptyHand(); give[a.give] = rate(game, pid, a.give);
+        get = emptyHand(); get[a.get] = 1;
+      } else { give = parseCards(a.give); get = parseCards(a.get); }
+      if (!handCount(give) || !handCount(get)) fail('Choose what to give and what to take');
+      if (RES.some((r) => give[r] && get[r])) fail("Don't put the same resource on both sides");
+      let lots = 0;
+      for (const r of RES) {
+        if (!give[r]) continue;
+        const k = rate(game, pid, r);
+        if (give[r] % k) fail(`${RES_NAME[r]} trades in groups of ${k}`);
+        lots += give[r] / k;
+      }
+      if (handCount(get) !== lots) fail(`That gives you ${lots} card${lots === 1 ? '' : 's'} to take — you picked ${handCount(get)}`);
+      if (!hasRes(p.hand, give)) fail("You don't have those cards");
+      for (const r of RES) if (get[r] > game.bank[r]) fail(`The bank only has ${game.bank[r]} ${RES_NAME[r]}`);
+      move(p.hand, game.bank, give); move(game.bank, p.hand, get);
+      log(game, `🏦 ${p.name} traded ${fmtRes(give)} to the bank for ${fmtRes(get)}.`);
       break;
     }
     case 'proposeTrade': {

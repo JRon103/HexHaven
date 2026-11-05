@@ -215,6 +215,9 @@ function noticeChanges(v) {
     steal: v.lastSteal ? v.lastSteal.id : 0,
     bandit: v.bandit,
     logId: v.log.length ? v.log[v.log.length - 1].id : 0,
+    // whose go it is: a new player's turn, a new setup placement, or a new builder-phase player
+    turnKey: v.status !== 'playing' || v.turn.phase === 'order' ? null
+      : v.turn.phase === 'builder' ? `b:${v.turn.number}:${v.turn.builder}` : `t:${v.turn.number}:${v.turn.current}`,
   };
   const prev = S.prev;
   S.prev = cur;
@@ -223,6 +226,7 @@ function noticeChanges(v) {
   if (cur.needMe && !prev.needMe) chime('turn');
   else if (cur.trade && cur.trade !== prev.trade) chime('trade');
   const stole = cur.steal !== prev.steal && v.lastSteal;
+  if (cur.turnKey && cur.turnKey !== prev.turnKey) showTurn(v);
   if (cur.roll !== prev.roll && v.lastRoll) showDice(v, v.lastRoll);
   if (stole) showSteal(v, v.lastSteal);
   if (cur.bandit !== prev.bandit && prev.bandit !== undefined) S.banditMove = { from: prev.bandit, at: now };
@@ -289,6 +293,28 @@ function showDice(v, roll) {
   setTimeout(land, reduce ? 0 : THROW_MS + 80);
   setTimeout(() => el.classList.add('out'), (reduce ? 0 : THROW_MS) + 2200);
   setTimeout(() => el.remove(), (reduce ? 0 : THROW_MS) + 2600);
+}
+
+// Big "whose turn" card across the top of the board when the turn passes
+function showTurn(v) {
+  const fx = $('#fx');
+  if (!fx) return;
+  fx.querySelectorAll('.turnfx').forEach((e) => e.remove());
+  const t = v.turn;
+  const pid = t.phase === 'builder' ? t.builder : t.current;
+  const mine = pid === v.me;
+  const name = esc(pname(v, pid));
+  let title; let sub = '';
+  if (t.phase === 'builder') { title = mine ? 'Builder phase — your chance to build' : `Builder phase: ${name}`; }
+  else if (t.phase === 'setup') { title = mine ? 'Your turn to place' : `${name} is placing`; sub = t.setupNeed === 'village' ? 'a settlement' : 'a road'; }
+  else { title = mine ? 'Your turn!' : `${name}'s turn`; sub = mine ? 'Roll the dice to start' : `Turn ${t.number}`; }
+  const el = document.createElement('div');
+  el.className = 'turnfx' + (mine ? ' mine' : '');
+  el.style.setProperty('--c', pcolor(v, pid));
+  el.innerHTML = `<span class="turnfx-chip"></span><div><div class="turnfx-title">${title}</div>${sub ? `<div class="turnfx-sub">${sub}</div>` : ''}</div>`;
+  fx.appendChild(el);
+  setTimeout(() => el.classList.add('out'), mine ? 2400 : 1700);
+  setTimeout(() => el.remove(), mine ? 2800 : 2100);
 }
 
 // A red pulse over the whole board when a 7 lands
@@ -582,6 +608,7 @@ function renderGame(v) {
         <div class="board-legend" id="legend"></div>
         <div class="fx" id="fx" aria-live="polite"></div>
         <div class="seven-banner" id="seven-banner" role="status" hidden></div>
+        <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
         <div class="zoomctl" role="group" aria-label="Map zoom">
           <button class="btn small" data-zoom="in" title="Zoom in (+ / mouse wheel / pinch)" aria-label="Zoom in">+</button>
           <button class="btn small" data-zoom="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
@@ -591,7 +618,6 @@ function renderGame(v) {
       <div class="dock" id="dock"></div>
       <aside class="side">
         <section><h3>Players <span class="hint" id="vp-target"></span></h3><div class="players" id="players"></div></section>
-        <section id="trade-sec" hidden></section>
         <section><h3>Dice stats <button class="btn small" id="stats-more">Details</button></h3>
           <div class="hint" id="dice-sum" style="margin:-4px 0 6px"></div>
           <div class="stats" id="stats"></div><div class="stats-l" id="stats-l"></div>
@@ -937,7 +963,7 @@ function renderDock(v) {
   if (v.status === 'playing') {
     if (t.phase === 'order' && (v.stalled || []).includes(v.me)) main += '<button class="btn primary pulse" data-act="roll" title="Shortcut: R">🎲 Roll for turn order</button>';
     if (mine && t.phase === 'preroll') main += '<button class="btn primary pulse" data-act="roll" title="Shortcut: R">🎲 Roll dice</button>';
-    if (mine && t.phase === 'main') main += '<button class="btn" data-act="trade" title="Shortcut: T">🤝 Trade</button><button class="btn primary" data-act="end" title="Shortcut: E">End turn ➜</button>';
+    if (mine && t.phase === 'main') main += '<button class="btn" data-act="trade" title="Trade with players (shortcut: T)">🤝 Trade</button><button class="btn" data-act="bank" title="Trade with the bank (shortcut: B)">🏦 Bank</button><button class="btn primary" data-act="end" title="Shortcut: E">End turn ➜</button>';
     if (t.phase === 'builder' && t.builder === v.me) main += '<button class="btn primary pulse" data-act="pass" title="Shortcut: E">Done building</button>';
     if (mine && t.phase === 'roadbuilding') main += '<button class="btn" data-act="skipRoads">Skip free roads</button>';
   } else if (v.status === 'over' && S.hideOver) {
@@ -979,6 +1005,7 @@ function renderDock(v) {
       else if (a === 'pass') { S.mode = null; send({ type: 'builderDone' }); }
       else if (a === 'skipRoads') send({ type: 'skipRoads' });
       else if (a === 'trade') openModal('trade');
+      else if (a === 'bank') openModal('bank');
       else if (a === 'results') { S.hideOver = false; renderGame(S.v); }
       else if (a === 'cardref') openModal('cardref');
     };
@@ -1142,7 +1169,7 @@ function diceModal(v) {
 // ---------- modals ----------
 function openModal(kind) {
   S.modal = kind;
-  if (kind === 'trade') S.ui = { give: zero(), get: zero(), bankGive: null, bankGet: null };
+  if (kind === 'trade' || kind === 'bank') { S.ui = { tab: kind === 'bank' ? 'bank' : 'players', give: zero(), get: zero(), bgive: zero(), bget: zero() }; S.modal = kind = 'trade'; }
   if (kind === 'plenty') S.ui = { picks: [] };
   if (kind === 'monopoly') S.ui = { pick: null };
   if (kind === 'counter') {
@@ -1162,6 +1189,25 @@ function stepperGrid(prefix, counts, limits, cap) {
     ${limits ? `<div class="have">of ${limits[r]}</div>` : ''}
     <div class="ctl"><button class="btn small" data-step="${prefix}:${r}:-1" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
     <button class="btn small" data-step="${prefix}:${r}:1" ${(limits && counts[r] >= limits[r]) || full ? 'disabled' : ''} aria-label="more ${RM[r].name}">+</button></div></div>`).join('')}</div>`;
+}
+
+// Bank steppers: the give side moves in whole lots at your rate; the want side is limited by
+// how many lots you've given and by what the bank still holds.
+function bankGrid(v, side) {
+  const u = S.ui; const hand = v.hand || zero();
+  const lots = RES.reduce((s, r) => s + u.bgive[r] / v.rates[r], 0);
+  const counts = u[side];
+  return `<div class="steppers">${RES.map((r) => {
+    const step = side === 'bgive' ? v.rates[r] : 1;
+    const other = side === 'bgive' ? u.bget[r] : u.bgive[r];
+    const canAdd = side === 'bgive' ? counts[r] + step <= hand[r] && !other
+      : cnt(u.bget) < lots && counts[r] < v.bank[r] && !other;
+    const sub = side === 'bgive' ? `${v.rates[r]}:1 · have ${hand[r]}` : `bank ${v.bank[r]}`;
+    return `<div class="stepper ${other ? 'locked' : ''}">
+      <div class="ico">${RM[r].ico}</div><div class="n">${counts[r]}</div><div class="have">${sub}</div>
+      <div class="ctl"><button class="btn small" data-step="${side}:${r}:-${step}" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
+      <button class="btn small" data-step="${side}:${r}:${step}" ${canAdd ? '' : 'disabled'} aria-label="more ${RM[r].name}">+${step > 1 ? step : ''}</button></div></div>`;
+  }).join('')}</div>`;
 }
 
 function renderModal(v) {
@@ -1213,25 +1259,34 @@ function renderModal(v) {
       <div class="foot"><button class="btn" data-do="close">Cancel</button><button class="btn primary" data-do="monopoly" ${S.ui.pick ? '' : 'disabled'}>Seize it</button></div>`;
   } else if (kind === 'trade') {
     const u = S.ui;
-    const gN = cnt(u.give), rN = cnt(u.get);
-    const clash = RES.some((r) => u.give[r] && u.get[r]);
-    const rateG = u.bankGive ? v.rates[u.bankGive] : null;
-    const bankOk = u.bankGive && u.bankGet && u.bankGive !== u.bankGet && hand[u.bankGive] >= rateG && v.bank[u.bankGet] > 0;
-    html = `<h2>Trade</h2>
-      <div><h3 style="font-size:16px">With other players</h3><p class="hint" style="margin:2px 0 8px">Everyone sees your offer and can accept; you choose who to trade with.</p>
+    const tabs = `<div class="tabs" role="tablist">
+      <button class="tab ${u.tab === 'players' ? 'on' : ''}" data-tab="players" role="tab" aria-selected="${u.tab === 'players'}">🤝 Players</button>
+      <button class="tab ${u.tab === 'bank' ? 'on' : ''}" data-tab="bank" role="tab" aria-selected="${u.tab === 'bank'}">🏦 Bank</button></div>`;
+    let body;
+    if (u.tab === 'players') {
+      const gN = cnt(u.give), rN = cnt(u.get);
+      const clash = RES.some((r) => u.give[r] && u.get[r]);
+      body = `<p class="hint" style="margin:0">Everyone sees your offer and can accept or counter; you choose who to trade with.</p>
         <b>You give</b>${stepperGrid('give', u.give, hand)}
-        <b style="display:block;margin-top:10px">You want</b>${stepperGrid('get', u.get, null)}
-        <div class="foot" style="margin-top:10px">${clash ? '<span class="hint" style="flex:1">Same resource on both sides</span>' : ''}<button class="btn primary" data-do="propose" ${gN && rN && !clash ? '' : 'disabled'}>Offer to everyone</button></div>
-      </div>
-      <hr style="border:0;border-top:1px solid var(--line);width:100%">
-      <div><h3 style="font-size:16px">With the bank</h3><p class="hint" style="margin:2px 0 8px">Your rates: ${RES.map((r) => `${RM[r].ico} ${v.rates[r]}:1`).join(' · ')}</p>
-        <div class="split">
-          <div><b>Give</b><div class="respick">${RES.map((r) => `<button class="btn small ${u.bankGive === r ? 'on' : ''}" data-bg="${r}" ${hand[r] >= v.rates[r] ? '' : 'disabled'}>${RM[r].ico} ${v.rates[r]}</button>`).join('')}</div></div>
-          <div><b>Get</b><div class="respick">${RES.map((r) => `<button class="btn small ${u.bankGet === r ? 'on' : ''}" data-bt="${r}" ${v.bank[r] > 0 && r !== u.bankGive ? '' : 'disabled'}>${RM[r].ico} 1</button>`).join('')}</div></div>
-        </div>
-        <div class="foot" style="margin-top:10px"><button class="btn primary" data-do="bank" ${bankOk ? '' : 'disabled'}>${bankOk ? `Trade ${rateG} ${RM[u.bankGive].ico} → 1 ${RM[u.bankGet].ico}` : 'Bank trade'}</button></div>
-      </div>
-      <div class="foot"><button class="btn" data-do="close">Close</button></div>`;
+        <b>You want</b>${stepperGrid('get', u.get, null)}
+        <div class="foot">${clash ? '<span class="hint" style="flex:1">Same resource on both sides</span>' : ''}
+          <button class="btn primary" data-do="propose" ${gN && rN && !clash ? '' : 'disabled'}>Offer to everyone</button></div>`;
+    } else {
+      // every lot you give (4, or 3/2 at a harbor) buys one card of your choice
+      const lots = RES.reduce((s, r) => s + u.bgive[r] / v.rates[r], 0);
+      const picked = cnt(u.bget);
+      const ok = lots > 0 && picked === lots;
+      const status = !lots ? 'Add what you give — each + adds one full lot at your rate.'
+        : picked < lots ? `You can take <b>${lots - picked}</b> more card${lots - picked === 1 ? '' : 's'}.`
+        : picked > lots ? `Too many — remove ${picked - lots}.` : 'Ready.';
+      body = `<p class="hint" style="margin:0">Your rates: ${RES.map((r) => `${RM[r].ico} <b>${v.rates[r]}:1</b>${v.rates[r] < 4 ? '<span title="harbor rate"> ⚓</span>' : ''}`).join(' · ')}${
+        RES.some((r) => v.rates[r] < 4) ? '' : ' — build on a harbor ⚓ for better rates'}</p>
+        <b>You give</b>${bankGrid(v, 'bgive')}
+        <b>You want</b>${bankGrid(v, 'bget')}
+        <div class="foot"><span class="hint" style="flex:1">${status}</span>
+          <button class="btn primary" data-do="bank" ${ok ? '' : 'disabled'}>${ok ? `Trade with the bank: ${RES.filter((r) => u.bgive[r]).map((r) => RM[r].ico + '×' + u.bgive[r]).join(' ')} → ${RES.filter((r) => u.bget[r]).map((r) => RM[r].ico + '×' + u.bget[r]).join(' ')}` : 'Trade with the bank'}</button></div>`;
+    }
+    html = `<h2>Trade</h2>${tabs}${body}<div class="foot"><button class="btn" data-do="close">Close</button></div>`;
   } else if (kind === 'dice') {
     html = diceModal(v);
   } else if (kind === 'counter') {
@@ -1276,8 +1331,7 @@ function renderModal(v) {
   });
   root.querySelectorAll('[data-pick]').forEach((b) => { b.onclick = () => { S.ui.picks.push(b.dataset.pick); renderModal(S.v); }; });
   root.querySelectorAll('[data-mono]').forEach((b) => { b.onclick = () => { S.ui.pick = b.dataset.mono; renderModal(S.v); }; });
-  root.querySelectorAll('[data-bg]').forEach((b) => { b.onclick = () => { S.ui.bankGive = b.dataset.bg; if (S.ui.bankGet === S.ui.bankGive) S.ui.bankGet = null; renderModal(S.v); }; });
-  root.querySelectorAll('[data-bt]').forEach((b) => { b.onclick = () => { S.ui.bankGet = b.dataset.bt; renderModal(S.v); }; });
+  root.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { S.ui.tab = b.dataset.tab; renderModal(S.v); }; });
   root.querySelectorAll('[data-do]').forEach((b) => {
     b.onclick = async () => {
       const d = b.dataset.do;
@@ -1289,7 +1343,7 @@ function renderModal(v) {
       if (d === 'monopoly') { if (await send({ type: 'playScroll', kind: 'monopoly', res: S.ui.pick })) closeModal(); }
       if (d === 'propose') { if (await send({ type: 'proposeTrade', give: S.ui.give, get: S.ui.get })) closeModal(); }
       if (d === 'counter') { if (await send({ type: 'respondTrade', id: S.ui.tradeId, counter: { give: S.ui.give, get: S.ui.get } })) closeModal(); }
-      if (d === 'bank') { await send({ type: 'bankTrade', give: S.ui.bankGive, get: S.ui.bankGet }); }
+      if (d === 'bank') { if (await send({ type: 'bankTrade', give: S.ui.bgive, get: S.ui.bget })) { S.ui.bgive = zero(); S.ui.bget = zero(); toast('Traded with the bank'); renderModal(S.v); } }
       if (d === 'rematch') { closeModal(); send({ type: 'rematch' }); }
     };
   });
@@ -1307,7 +1361,7 @@ setInterval(() => {
   el.classList.toggle('low', left <= 10 && (S.v.stalled || []).includes(S.v.me));
 }, 250);
 
-// Shortcuts: R roll · E end turn / done building · T trade · 1–4 road/village/town/scroll · Esc cancel
+// Shortcuts: R roll · E end turn / done building · T trade · B bank · 1–4 road/settlement/city/dev card · Esc cancel
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(S.modal)) closeModal();
@@ -1315,7 +1369,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || S.modal) return;
-  const key = { r: 'roll', e: 'end', t: 'trade', 1: 'b-road', 2: 'b-village', 3: 'b-town', 4: 'b-scroll' }[e.key.toLowerCase()];
+  const key = { r: 'roll', e: 'end', t: 'trade', b: 'bank', 1: 'b-road', 2: 'b-village', 3: 'b-town', 4: 'b-scroll' }[e.key.toLowerCase()];
   if (S.screen === 'game' && ['+', '=', '-', '_', '0'].includes(e.key)) {
     e.preventDefault();
     if (e.key === '0') { S.vb = S.vb0.slice(); applyVB(); } else zoomBy(e.key === '-' || e.key === '_' ? 1 / 1.4 : 1.4);

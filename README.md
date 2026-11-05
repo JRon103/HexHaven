@@ -48,7 +48,8 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Development cards** (each shows its rules text in the game): Guard (move the bandit), Road Crew (2 free roads), Bounty (take any 2), Embargo (collect one resource from everyone), Monument (+1 hidden point). You can play one per turn, but not on the turn you bought it.
 - **Awards:** Grand Route (longest road of 5+, +2) and Strongest Watch (3+ Guards, +2).
 - **Big games:** with 5+ players the island grows to 37 tiles, with a bigger bank and development-card deck. The **builder phase** (on by default) lets everyone else build between turns.
-- **Trading:** the active player makes an offer. Others can accept, decline or send a **counter-offer**, and the offerer picks one.
+- **Trading:** the active player makes an offer, which pops up in the top-left corner of everyone's board. Others can accept, decline or send a **counter-offer**, and the offerer picks one.
+- **Bank trades** use the same give/want pickers. Each + on the give side adds a full lot at your rate (4, or 3/2 at a harbor ⚓), and every lot buys one card of your choice; several lots can go in one trade.
 
 ## Quality of life
 
@@ -64,7 +65,7 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Rolling a 7:** the dice turn red, the board flashes, and a red banner stays up until discards, the bandit move and the steal are done. When discarding you can only pick exactly the number of cards you owe.
 - **Robbing:** after moving the bandit you pick one of the victim's face-down cards. It flips over to show what you took, and only you and the victim see what it was.
 - Every roll shows two 3D dice thrown onto the board. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
-- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `1`–`4` road / settlement / city / development card · `Esc` cancel.
+- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card · `Esc` cancel.
 
 ## Files
 
