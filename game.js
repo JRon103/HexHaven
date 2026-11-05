@@ -177,8 +177,9 @@ function addPlayer(game, name) {
   return p;
 }
 
-function log(game, msg, to) {
-  game.log.push({ id: ++game.logSeq, t: Date.now(), msg, ...(to ? { to } : {}) });
+// data: optional structured detail the client can render richly (e.g. harvest icons); msg stays the plain-text fallback
+function log(game, msg, to, data) {
+  game.log.push({ id: ++game.logSeq, t: Date.now(), msg, ...(to ? { to } : {}), ...(data ? { data } : {}) });
   if (game.log.length > 300) game.log.splice(0, game.log.length - 300);
 }
 
@@ -243,7 +244,7 @@ function orderRoll(game, p) {
   game.order.final = game.players.map((x) => x.id);
   game.turn.idx = 0; game.turn.phase = 'setup';
   log(game, `${game.players[0].name} goes first! Turn order: ${game.players.map((x) => x.name).join(' → ')}.`);
-  log(game, `${game.players[0].name}, place your first village.`);
+  log(game, `${game.players[0].name}, place your first settlement.`);
 }
 
 function resetToLobby(game) {
@@ -378,7 +379,7 @@ function produce(game, sum) {
     }
   }
   const parts = Object.entries(got).map(([pid, c]) => `${P(game, pid).name}: ${fmtRes(c)}`);
-  log(game, parts.length ? `Harvest — ${parts.join(' · ')}` : 'Nobody harvests anything.');
+  log(game, parts.length ? `Harvest — ${parts.join(' · ')}` : 'Nobody harvests anything.', null, { type: 'harvest', gains: got });
 }
 
 // The thief points at one of the victim's face-down cards; the hand is shuffled so the pick is blind.
@@ -558,40 +559,40 @@ function act(game, pid, a) {
       const v = Number(a.vertex);
       if (t.phase === 'setup') {
         mustCur('setup');
-        if (t.setup.need !== 'village') fail('Place a road next to your village');
-        if (!canPlaceVillage(game, pid, v, true)) fail("You can't build there (too close to another village?)");
+        if (t.setup.need !== 'village') fail('Place a road next to your settlement');
+        if (!canPlaceVillage(game, pid, v, true)) fail("You can't build there (too close to another settlement?)");
         game.buildings[v] = { owner: pid, type: 'village' }; p.pieces.village--;
-        log(game, `${p.name} placed a village.`);
+        log(game, `${p.name} placed a settlement.`);
         if (t.setup.pos >= game.players.length) {
           const got = emptyHand();
           for (const hid of game.board.vertices[v].hexes) {
             const h = game.board.hexes[hid];
             if (h.res !== 'desert' && game.bank[h.res] > 0) { got[h.res]++; game.bank[h.res]--; p.hand[h.res]++; }
           }
-          log(game, `${p.name} collects ${fmtRes(got)}.`);
+          log(game, `${p.name} collects ${fmtRes(got)}.`, null, { type: 'harvest', gains: { [p.id]: got }, setup: true });
         }
         t.setup.need = 'road'; t.setup.last = v;
         break;
       }
       if (!canBuild()) fail(phaseHint(t.phase));
-      if (p.pieces.village <= 0) fail('You have no villages left');
-      if (!hasRes(p.hand, COST.village)) fail('Not enough resources for a village');
-      if (!canPlaceVillage(game, pid, v, false)) fail("You can't build a village there");
+      if (p.pieces.village <= 0) fail('You have no settlements left');
+      if (!hasRes(p.hand, COST.village)) fail('Not enough resources for a settlement');
+      if (!canPlaceVillage(game, pid, v, false)) fail("You can't build a settlement there");
       move(p.hand, game.bank, COST.village);
       game.buildings[v] = { owner: pid, type: 'village' }; p.pieces.village--;
-      log(game, `🏠 ${p.name} built a village.`);
+      log(game, `🏠 ${p.name} built a settlement.`);
       updateLongest(game);
       break;
     }
     case 'buildTown': {
       if (!canBuild()) fail(phaseHint(t.phase));
       const v = Number(a.vertex); const b = game.buildings[v];
-      if (!b || b.owner !== pid || b.type !== 'village') fail('Towns are built on top of your own villages');
-      if (p.pieces.town <= 0) fail('You have no towns left');
-      if (!hasRes(p.hand, COST.town)) fail('Not enough resources for a town');
+      if (!b || b.owner !== pid || b.type !== 'village') fail('Cities are built on top of your own settlements');
+      if (p.pieces.town <= 0) fail('You have no cities left');
+      if (!hasRes(p.hand, COST.town)) fail('Not enough resources for a city');
       move(p.hand, game.bank, COST.town);
       b.type = 'town'; p.pieces.town--; p.pieces.village++;
-      log(game, `🏰 ${p.name} upgraded a village to a town.`);
+      log(game, `🏰 ${p.name} upgraded a settlement to a city.`);
       break;
     }
     case 'buildRoad': {
@@ -599,8 +600,8 @@ function act(game, pid, a) {
       if (!E) fail('Pick a road spot');
       if (t.phase === 'setup') {
         mustCur('setup');
-        if (t.setup.need !== 'road') fail('Place a village first');
-        if (game.roads[e] !== undefined || (E.a !== t.setup.last && E.b !== t.setup.last)) fail('The road must touch the village you just placed');
+        if (t.setup.need !== 'road') fail('Place a settlement first');
+        if (game.roads[e] !== undefined || (E.a !== t.setup.last && E.b !== t.setup.last)) fail('The road must touch the settlement you just placed');
         game.roads[e] = pid; p.pieces.road--;
         t.setup.pos++;
         const n = game.players.length;
@@ -609,7 +610,7 @@ function act(game, pid, a) {
           log(game, `Setup complete! ${current(game).name} rolls first.`);
         } else {
           t.idx = setupIdx(t.setup.pos, n); t.setup.need = 'village'; t.setup.last = null;
-          log(game, `${current(game).name}, place a village.`);
+          log(game, `${current(game).name}, place a settlement.`);
         }
         updateLongest(game);
         break;
@@ -640,22 +641,22 @@ function act(game, pid, a) {
     }
     case 'buyScroll': {
       if (!canBuild()) fail(phaseHint(t.phase));
-      if (!game.deck.length) fail('No scrolls left');
-      if (!hasRes(p.hand, COST.scroll)) fail('Not enough resources for a scroll');
+      if (!game.deck.length) fail('No development cards left');
+      if (!hasRes(p.hand, COST.scroll)) fail('Not enough resources for a development card');
       move(p.hand, game.bank, COST.scroll);
       const type = game.deck.pop();
       p.scrolls.push({ type, bought: t.number });
-      log(game, `📜 ${p.name} bought a scroll.`);
-      log(game, `Your new scroll: ${SCROLL_NAME[type]}.`, pid);
+      log(game, `📜 ${p.name} bought a development card.`);
+      log(game, `Your new development card: ${SCROLL_NAME[type]}.`, pid);
       break;
     }
     case 'playScroll': {
       mustCur('preroll', 'main');
-      if (t.devPlayed) fail('You can only play one scroll per turn');
+      if (t.devPlayed) fail('You can only play one development card per turn');
       const kind = a.kind;
-      if (kind === 'vp' || !SCROLL_NAME[kind]) fail('That scroll cannot be played');
+      if (kind === 'vp' || !SCROLL_NAME[kind]) fail('That card cannot be played');
       const i = p.scrolls.findIndex((s) => s.type === kind && s.bought < t.number);
-      if (i < 0) fail(p.scrolls.some((s) => s.type === kind) ? "You can't play a scroll on the turn you bought it" : "You don't have that scroll");
+      if (i < 0) fail(p.scrolls.some((s) => s.type === kind) ? "You can't play a development card on the turn you bought it" : "You don't have that card");
       if (kind === 'plenty') {
         if (!RES.includes(a.res) || !RES.includes(a.res2)) fail('Pick two resources');
         const need = emptyHand(); need[a.res]++; need[a.res2]++;

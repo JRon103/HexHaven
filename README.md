@@ -1,6 +1,6 @@
 # Hexhaven
 
-A browser game for 2–8 friends about settling a hex island and trading resources. You roll dice, collect resources, build roads, villages and towns, trade, and race to 10 points.
+A browser game for 2–8 friends about settling a hex island and trading resources. You roll dice, collect resources, build roads, settlements and cities, trade, and race to 10 points.
 
 No install step: it needs only Node.js 18+ and has zero dependencies.
 
@@ -37,17 +37,17 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 | Piece   | Cost                          | Points |
 |---------|-------------------------------|--------|
 | Road    | Wood + Clay                   | —      |
-| Village | Wood + Clay + Fleece + Wheat  | 1      |
-| Town    | 2 Wheat + 3 Iron (upgrades a village) | 2 |
-| Scroll  | Fleece + Wheat + Iron         | maybe  |
+| Settlement | Wood + Clay + Fleece + Wheat  | 1      |
+| City    | 2 Wheat + 3 Iron (upgrades a settlement) | 2 |
+| Development card | Fleece + Wheat + Iron  | maybe  |
 
 - **Who goes first:** everyone rolls the dice, and the highest roll starts. Tied players re-roll. Play then goes around the table in lobby order.
-- **Setup:** players place a village and a road in snake order (1→N, then N→1). Your second village pays out one card per neighboring tile.
+- **Setup:** players place a settlement and a road in snake order (1→N, then N→1). Your second settlement pays out one card per neighboring tile.
 - **Turn:** roll, collect, then build, trade with players or the bank (4:1, or 3:1 / 2:1 at harbors), and end your turn.
 - **Rolling a 7:** anyone holding more than 7 cards discards half. The roller moves the bandit, which blocks that tile, and steals a card from a player who has a building there.
-- **Scrolls:** Guard (move the bandit), Road Crew (2 free roads), Bounty (take any 2), Embargo (collect one resource from everyone), Monument (+1 hidden point). You can play one per turn, but not on the turn you bought it.
+- **Development cards** (each shows its rules text in the game): Guard (move the bandit), Road Crew (2 free roads), Bounty (take any 2), Embargo (collect one resource from everyone), Monument (+1 hidden point). You can play one per turn, but not on the turn you bought it.
 - **Awards:** Grand Route (longest road of 5+, +2) and Strongest Watch (3+ Guards, +2).
-- **Big games:** with 5+ players the island grows to 37 tiles, with a bigger bank and scroll deck. The **builder phase** (on by default) lets everyone else build between turns.
+- **Big games:** with 5+ players the island grows to 37 tiles, with a bigger bank and development-card deck. The **builder phase** (on by default) lets everyone else build between turns.
 - **Trading:** the active player makes an offer. Others can accept, decline or send a **counter-offer**, and the offerer picks one.
 
 ## Quality of life
@@ -59,10 +59,12 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Lost your seat?** Join the room with the exact same name and you'll get it back, as long as that seat is offline.
 - **Host left?** Anyone can click *become host* while the host is offline. The host can **Skip** an AFK player, and anyone can skip a player who is offline.
 - A chime plays when it's your move or a trade offer arrives (🔔 toggles it). A toast shows the cards you just got, and newly built pieces glow briefly.
-- **Map zoom:** scroll wheel, pinch, or the + / − / ⤢ buttons. Drag to pan while zoomed.
+- **Map zoom:** the map opens zoomed in, so drag to pan right away. Scroll wheel, pinch, or the + / − / ⤢ buttons (⤢ shows the whole island).
+- **Build costs light up:** each cost icon glows when you hold that card and greys out when you are missing it.
+- **Rolling a 7:** the dice turn red, the board flashes, and a red banner stays up until discards, the bandit move and the steal are done. When discarding you can only pick exactly the number of cards you owe.
 - **Robbing:** after moving the bandit you pick one of the victim's face-down cards. It flips over to show what you took, and only you and the victim see what it was.
-- Every roll appears as big tumbling dice over the board. New pieces drop in, and the bandit slides to its new tile.
-- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `1`–`4` road / village / town / scroll · `Esc` cancel.
+- Every roll shows two 3D dice thrown onto the board. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
+- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `1`–`4` road / settlement / city / development card · `Esc` cancel.
 
 ## Files
 

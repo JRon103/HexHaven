@@ -15,11 +15,11 @@ const PC = {
   green: '#2c9a55', brown: '#8b5a2b', purple: '#8e4ec6', teal: '#17a8a8',
 };
 const SCROLL_INFO = {
-  guard: { ico: '🛡️', desc: 'Move the bandit and steal a card. 3+ guards earns the Strongest Watch (+2 VP).' },
-  route: { ico: '🛤️', desc: 'Build 2 roads for free.' },
-  plenty: { ico: '🎁', desc: 'Take any 2 resources from the bank.' },
-  monopoly: { ico: '⚖️', desc: 'Name a resource — every other player gives you all of theirs.' },
-  vp: { ico: '🗿', desc: '+1 victory point (kept hidden until the end).' },
+  guard: { ico: '🛡️', desc: 'Move the bandit to any tile and steal 1 card from a player with a building there. Played Guards stay in front of you: the first to play 3 earns the Strongest Watch (+2 points).' },
+  route: { ico: '🛤️', desc: 'Place 2 roads for free. They follow the normal road rules (connected to your roads or buildings).' },
+  plenty: { ico: '🎁', desc: 'Take any 2 resource cards from the bank. They can be the same resource.' },
+  monopoly: { ico: '⚖️', desc: 'Name a resource. Every other player must give you all of their cards of that resource.' },
+  vp: { ico: '🗿', desc: 'Worth 1 victory point. Keep it hidden — it counts automatically and is revealed at the end.' },
 };
 const BUILD_ICO = { road: '🛤️', village: '🏠', town: '🏰', scroll: '📜' };
 const U = 56; // board units -> px
@@ -34,7 +34,11 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const cnt = (h) => RES.reduce((s, r) => s + (h[r] || 0), 0);
 const has = (h, c) => RES.every((r) => (h[r] || 0) >= (c[r] || 0));
 const zero = () => ({ wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0 });
-const costStr = (c) => RES.filter((r) => c[r]).map((r) => RM[r].ico.repeat(c[r])).join('');
+// One icon per card a build needs; each lights up if you hold it (the 2nd iron lights only with 2 iron, etc.)
+const costHtml = (c, hand) => RES.filter((r) => c[r]).map((r) => Array.from({ length: c[r] }, (_, i) => {
+  const ok = (hand[r] || 0) > i;
+  return `<span class="c ${ok ? 'have' : 'miss'}" title="${RM[r].name}${ok ? '' : ' — missing'}">${RM[r].ico}</span>`;
+}).join('')).join('');
 const resList = (c) => RES.filter((r) => c[r]).map((r) => `${c[r]} ${RM[r].ico} ${RM[r].name}`).join(', ');
 
 function toast(msg, err) {
@@ -138,15 +142,15 @@ function renderHome(prefill = '') {
     <div class="card rules">
       <h3>How to play</h3>
       <ul>
-        <li>Everyone places two villages and two roads to start. Your second village pays out its neighboring tiles.</li>
-        <li>Each turn, roll two dice. Every tile showing that number pays its resource to adjacent villages (1) and towns (2).</li>
-        <li>Spend resources to build, trade with other players or the bank (4:1, or better at a harbor), and buy scrolls.</li>
+        <li>Everyone rolls to decide who goes first, then places two settlements and two roads. Your second settlement pays out its neighboring tiles.</li>
+        <li>Each turn, roll two dice. Every tile showing that number pays its resource to adjacent settlements (1) and cities (2).</li>
+        <li>Spend resources to build, trade with other players or the bank (4:1, or better at a harbor), and buy development cards.</li>
         <li>Rolling a 7 summons the bandit: anyone holding more than 7 cards discards half, then the roller blocks a tile and steals a card.</li>
-        <li>Village = 1 point, Town = 2. The longest road (5+) is the <b>Grand Route</b> (+2), and 3+ Guards played earns the <b>Strongest Watch</b> (+2). First to 10 points on their own turn wins.</li>
+        <li>Settlement = 1 point, City = 2. The longest road (5+) is the <b>Grand Route</b> (+2), and 3+ Guards played earns the <b>Strongest Watch</b> (+2). First to 10 points on their own turn wins.</li>
         <li>With 3+ players, a <b>builder phase</b> after each turn lets everyone else build too, so big games keep moving.</li>
       </ul>
       <div class="costs">
-        <span>🛤️ Road: 🌲🧱</span><span>🏠 Village: 🌲🧱🐑🌾</span><span>🏰 Town: 🌾🌾⛏️⛏️⛏️</span><span>📜 Scroll: 🐑🌾⛏️</span>
+        <span>🛤️ Road: 🌲🧱</span><span>🏠 Settlement: 🌲🧱🐑🌾</span><span>🏰 City: 🌾🌾⛏️⛏️⛏️</span><span>📜 Development card: 🐑🌾⛏️</span>
       </div>
     </div>
   </div>`;
@@ -189,7 +193,7 @@ function chime(kind) {
   if (!soundOn()) return;
   try {
     const ctx = S.audio || (S.audio = new (window.AudioContext || window.webkitAudioContext)());
-    const notes = kind === 'trade' ? [660, 880] : [523, 659, 784];
+    const notes = kind === 'trade' ? [660, 880] : kind === 'seven' ? [392, 311, 233] : [523, 659, 784];
     notes.forEach((f, i) => {
       const o = ctx.createOscillator(); const g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = f;
@@ -233,33 +237,68 @@ function noticeChanges(v) {
   for (const [k, t] of S.recent) if (now - t > 4000) S.recent.delete(k);
 }
 
-// Big tumbling dice over the board, seen by everyone
+// ---------- dice throw: two 3D cubes tossed onto the board, seen by everyone ----------
+// Faces sit on a cube; to show face n we rotate the cube by FACE_TURN[n] ([x°, y°]).
+const CUBE_FACES = [['front', 1], ['back', 6], ['right', 3], ['left', 4], ['top', 2], ['bottom', 5]];
+const FACE_TURN = { 1: [0, 0], 2: [-90, 0], 3: [0, -90], 4: [0, 90], 5: [90, 0], 6: [0, 180] };
+const THROW_MS = 1150;
+
 function showDice(v, roll) {
   const fx = $('#fx');
   if (!fx) return;
   fx.querySelectorAll('.dicefx').forEach((e) => e.remove());
   const sum = roll.d[0] + roll.d[1];
+  const seven = sum === 7 && roll.kind !== 'order';
   const who = esc(pname(v, roll.by));
   const label = roll.kind === 'order' ? `${who} rolled <b>${sum}</b> for turn order`
-    : `${who} rolled <b>${sum}</b>${sum === 7 ? ' — bandits!' : ''}`;
+    : seven ? `${who} rolled <b>7</b> — 🥷 Bandits!` : `${who} rolled <b>${sum}</b>`;
   const el = document.createElement('div');
   el.className = 'dicefx';
   el.style.setProperty('--c', pcolor(v, roll.by));
-  el.innerHTML = `<div class="dicefx-dice"><span class="die3">${dieSvg(1 + Math.floor(Math.random() * 6))}</span><span class="die3">${dieSvg(1 + Math.floor(Math.random() * 6))}</span></div><div class="fx-label">${label}</div>`;
+  el.innerHTML = `<div class="dicefx-dice">${roll.d.map(() => `<div class="die3d"><div class="dshadow"></div><div class="cube">${
+    CUBE_FACES.map(([f, n]) => `<div class="face ${f}">${dieSvg(n)}</div>`).join('')}</div></div>`).join('')}</div>
+    <div class="fx-label">${label}</div>`;
   fx.appendChild(el);
-  const dice = el.querySelectorAll('.die3');
+
+  const land = () => {
+    el.classList.add('landed');
+    if (seven) { el.classList.add('seven'); banditAlert(); chime('seven'); }
+  };
+  const dice = [...el.querySelectorAll('.die3d')];
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let k = reduce ? 99 : 0;
-  const land = () => { dice.forEach((d, i) => { d.innerHTML = dieSvg(roll.d[i]); }); el.classList.add('landed'); };
-  if (reduce) land();
-  else {
-    const spin = setInterval(() => {
-      dice.forEach((d) => { d.innerHTML = dieSvg(1 + Math.floor(Math.random() * 6)); });
-      if (++k >= 10) { clearInterval(spin); land(); }
-    }, 70);
-  }
-  setTimeout(() => el.classList.add('out'), 2400);
-  setTimeout(() => el.remove(), 2800);
+  dice.forEach((d, i) => {
+    const [tx, ty] = FACE_TURN[roll.d[i]];
+    const cube = d.querySelector('.cube');
+    const end = `rotateX(${tx}deg) rotateY(${ty}deg)`;
+    if (reduce || !cube.animate) { cube.style.transform = end; return; }
+    // spin whole turns plus a random extra, ending exactly on the rolled face
+    const sx = tx + 360 * (2 + i) + (i ? 37 : -23), sy = ty + 360 * (3 - i) + (i ? -51 : 64);
+    const opts = { duration: THROW_MS, delay: i * 70, easing: 'cubic-bezier(.15,.65,.3,1)', fill: 'both' };
+    cube.animate([{ transform: `rotateX(${sx}deg) rotateY(${sy}deg)` }, { transform: end }], opts);
+    // the throw: in from the lower left, an arc, two small bounces, settle
+    const W = fx.clientWidth, H = fx.clientHeight, dy = i ? 24 : -10;
+    d.animate([
+      { transform: `translate(${-W * 0.5}px, ${H * 0.32 + dy}px) rotate(-220deg)`, offset: 0 },
+      { transform: `translate(${-W * 0.14}px, ${-H * 0.06}px) rotate(-70deg)`, offset: 0.45 },
+      { transform: `translate(${-W * 0.03}px, 4px) rotate(-14deg)`, offset: 0.68 },
+      { transform: 'translate(-6px, -12px) rotate(-5deg)', offset: 0.82 },
+      { transform: 'translate(0, 0) rotate(0)', offset: 1 },
+    ], { ...opts, easing: 'ease-out' });
+    d.querySelector('.dshadow').animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1)' }], opts);
+  });
+  setTimeout(land, reduce ? 0 : THROW_MS + 80);
+  setTimeout(() => el.classList.add('out'), (reduce ? 0 : THROW_MS) + 2200);
+  setTimeout(() => el.remove(), (reduce ? 0 : THROW_MS) + 2600);
+}
+
+// A red pulse over the whole board when a 7 lands
+function banditAlert() {
+  const wrap = $('#boardwrap');
+  if (!wrap) return;
+  const a = document.createElement('div');
+  a.className = 'bandit-flash';
+  wrap.appendChild(a);
+  setTimeout(() => a.remove(), 1600);
 }
 
 // The stolen card flips over for the thief and the victim; everyone else just sees it leave
@@ -486,10 +525,41 @@ function renderLog(v) {
   S.lastLog = last;
   el.innerHTML = v.log.map((l) => {
     if (l.chat) return `<div class="e chat"><b style="color:${pcolor(v, l.from)};filter:brightness(.8)">${esc(pname(v, l.from))}:</b> ${esc(l.msg)}</div>`;
-    const cls = l.private ? 'private' : (l.msg.startsWith('—') ? 'turn' : '');
-    return `<div class="e ${cls}">${esc(l.msg)}</div>`;
+    if (l.data && l.data.type === 'harvest') return harvestLine(v, l.data);
+    const seven = /rolled 7 \(|^Bandits!/.test(l.msg);
+    const cls = l.private ? 'private' : seven ? 'seven' : (l.msg.startsWith('—') ? 'turn' : '');
+    return `<div class="e ${cls}">${decorateLog(v, esc(l.msg))}</div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
+}
+
+// "who got what": a row per player — their color, their name, then one icon per card
+function harvestLine(v, d) {
+  const rows = Object.entries(d.gains).map(([pid, c]) => {
+    const icons = RES.filter((r) => c[r] > 0).map((r) => `<span class="gain" title="${c[r]} ${RM[r].name}">${c[r] <= 3 ? RM[r].ico.repeat(c[r]) : `${RM[r].ico}×${c[r]}`}</span>`).join('');
+    return `<span class="hv">${whoTag(v, pid)}${icons || '<span class="hint">nothing</span>'}</span>`;
+  });
+  return `<div class="e harvest">${d.setup ? '' : '<span class="hv-tag">🎲 Harvest</span>'}${rows.join('')}</div>`;
+}
+
+const whoTag = (v, pid) => {
+  const p = v.players.find((x) => x.id === pid);
+  return `<span class="who">${chip(p ? p.color : '#999')}${esc(p ? p.name : 'Someone')}</span>`;
+};
+
+// Put each player's color dot in front of their name and an icon next to resource names.
+// Works on already-escaped text; longest names first so "Ana" never splits "Anabel".
+function decorateLog(v, html) {
+  const players = v.players.map((p) => ({ p, n: esc(p.name) })).sort((a, b) => b.n.length - a.n.length);
+  const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const words = [...players.map((x) => reEsc(x.n)), 'Wood', 'Clay', 'Fleece', 'Wheat', 'Iron'];
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}_])(${words.join('|')})(?=$|[^\\p{L}\\p{N}_])`, 'gu');
+  return html.replace(re, (m, pre, w) => {
+    const pl = players.find((x) => x.n === w);
+    if (pl) return `${pre}<span class="who">${chip(pl.p.color)}${w}</span>`;
+    const r = RES.find((k) => RM[k].name === w);
+    return `${pre}${RM[r].ico} ${w}`;
+  });
 }
 
 // ---------- game ----------
@@ -511,6 +581,7 @@ function renderGame(v) {
         <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="g-static"></g><g id="g-low"></g><g id="g-dyn"></g><g id="g-hint"></g></svg>
         <div class="board-legend" id="legend"></div>
         <div class="fx" id="fx" aria-live="polite"></div>
+        <div class="seven-banner" id="seven-banner" role="status" hidden></div>
         <div class="zoomctl" role="group" aria-label="Map zoom">
           <button class="btn small" data-zoom="in" title="Zoom in (+ / mouse wheel / pinch)" aria-label="Zoom in">+</button>
           <button class="btn small" data-zoom="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
@@ -578,8 +649,8 @@ function statusText(v) {
       return `Rolling for turn order… waiting for ${waiting.map((id) => esc(pname(v, id))).join(', ')}`;
     }
     case 'setup': {
-      const what = t.setupNeed === 'village' ? (t.setupRound === 1 ? 'first village' : 'second village (it pays out right away)') : 'road next to it';
-      return mine ? `Place your ${what} — click a glowing spot` : `${cur} is placing their ${t.setupNeed}…`;
+      const what = t.setupNeed === 'village' ? (t.setupRound === 1 ? 'first settlement' : 'second settlement (it pays out right away)') : 'road next to it';
+      return mine ? `Place your ${what} — click a glowing spot` : `${cur} is placing their ${t.setupNeed === 'village' ? 'settlement' : 'road'}…`;
     }
     case 'preroll': return mine ? 'Your turn — roll the dice' : `${cur} is about to roll…`;
     case 'discard': {
@@ -602,6 +673,23 @@ function renderStatus(v) {
   el.className = 'status' + (needMe ? ' mine' : '');
   el.innerHTML = `<span class="turnchip" style="background:${pcolor(v, v.turn.phase === 'builder' ? v.turn.builder : v.turn.current)}"></span><span>${statusText(v)}</span>`;
   $('#dice').innerHTML = v.turn.dice ? v.turn.dice.map(dieSvg).join('') : '';
+  // a 7 keeps a red banner on the board until the discards, the bandit move and the steal are done
+  const t = v.turn;
+  const rolledSeven = !!(t.dice && t.dice[0] + t.dice[1] === 7);
+  const banditTime = v.status === 'playing' && rolledSeven && ['discard', 'robber', 'steal'].includes(t.phase);
+  $('#dice').classList.toggle('seven', rolledSeven);
+  const banner = $('#seven-banner');
+  banner.hidden = !banditTime;
+  if (banditTime) {
+    const cur = esc(pname(v, t.current)); const mine = isMine(v);
+    let what;
+    if (t.phase === 'discard') {
+      what = v.pendingDiscard[v.me] ? `you must discard ${v.pendingDiscard[v.me]} cards`
+        : `waiting for ${Object.keys(v.pendingDiscard).map((id) => esc(pname(v, id))).join(', ')} to discard`;
+    } else if (t.phase === 'robber') what = mine ? 'click a tile to move the bandit' : `${cur} is moving the bandit`;
+    else what = mine ? 'pick a card to steal' : `${cur} is choosing a card to steal`;
+    banner.innerHTML = `<b>🥷 7 rolled — Bandits!</b><span>${what}</span>`;
+  }
   $('#vp-target').textContent = `first to ${v.settings.vpTarget}`;
 }
 
@@ -625,7 +713,8 @@ function renderBoardStatic(v) {
   const minX = (Math.min(...xs) - pad) * U, minY = (Math.min(...ys) - pad) * U;
   const w = (Math.max(...xs) - Math.min(...xs) + 2 * pad) * U, h = (Math.max(...ys) - Math.min(...ys) + 2 * pad) * U;
   S.vb0 = [minX, minY, w, h]; S.vb = S.vb0.slice();
-  applyVB();
+  // start a little zoomed in so tiles are big and the map can be dragged right away; ⤢ shows the whole island
+  zoomBy(b.radius >= 3 ? 1.45 : 1.25);
   let out = '<defs><filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".35"/></filter></defs>';
   // harbors (behind tiles so docks tuck under the coast)
   for (const hb of b.harbors) {
@@ -708,6 +797,7 @@ function renderBoardDyn(v) {
     const mv = S.banditMove; const age = mv ? Date.now() - mv.at : Infinity;
     const from = mv && b.hexes[mv.from];
     const slide = age < 800 && from ? ` class="slide" style="--dx:${(from.x - bh.x) * U}px;--dy:${(from.y - bh.y) * U}px;animation-delay:-${age}ms"` : '';
+    if (v.status === 'playing' && v.turn.phase === 'robber') out += `<circle class="bandit-ring" cx="${x}" cy="${y - 2}" r="18"/>`;
     out += `<g aria-label="bandit"${slide}><ellipse cx="${x}" cy="${y + 12}" rx="10" ry="3.5" fill="rgba(0,0,0,.35)"/>
       <path d="M${x - 8},${y + 12} Q${x},${y - 16} ${x + 8},${y + 12} Z" fill="#2a2420" stroke="#000" stroke-width="1.5"/>
       <circle cx="${x}" cy="${y - 9}" r="6.5" fill="#2a2420" stroke="#000" stroke-width="1.5"/></g>`;
@@ -834,10 +924,15 @@ function renderDock(v) {
     scroll: building && has(hand, v.cost.scroll) && v.deckCount > 0,
   };
   const left = { road: me.pieces.road, village: me.pieces.village, town: me.pieces.town, scroll: v.deckCount };
-  const label = { road: 'Road', village: 'Village', town: 'Town', scroll: 'Scroll' };
+  const label = { road: 'Road', village: 'Settlement', town: 'City', scroll: 'Dev card' };
+  const what = {
+    road: 'Road', village: 'Settlement (1 point)', town: 'City — upgrades a settlement (2 points)',
+    scroll: 'Development card — draw a random card from the deck',
+  };
   const buildBtns = ['road', 'village', 'town', 'scroll'].map((k) => `
-    <button class="btn build ${S.mode === k ? 'on' : ''}" data-build="${k}" ${can[k] ? '' : 'disabled'} title="${label[k]} — ${left[k]} left · shortcut ${['road', 'village', 'town', 'scroll'].indexOf(k) + 1}">
-      <span>${BUILD_ICO[k]} ${label[k]}</span><span class="cost">${costStr(v.cost[k])}</span></button>`).join('');
+    <button class="btn build ${S.mode === k ? 'on' : ''}" data-build="${k}" ${can[k] ? '' : 'disabled'} title="${what[k]} — ${left[k]} left · shortcut ${['road', 'village', 'town', 'scroll'].indexOf(k) + 1}">
+      <span>${BUILD_ICO[k]} ${label[k]}</span><span class="cost">${costHtml(v.cost[k], hand)}</span></button>`).join('')
+    + '<button class="btn small" data-act="cardref" title="What do development cards do?" aria-label="Development card reference">ℹ️</button>';
   let main = '';
   if (v.status === 'playing') {
     if (t.phase === 'order' && (v.stalled || []).includes(v.me)) main += '<button class="btn primary pulse" data-act="roll" title="Shortcut: R">🎲 Roll for turn order</button>';
@@ -851,15 +946,23 @@ function renderDock(v) {
   const canPlay = v.status === 'playing' && mine && ['preroll', 'main'].includes(t.phase) && !t.devPlayed;
   const groups = {};
   for (const s of v.myScrolls) { const g = groups[s.type] = groups[s.type] || { n: 0, ready: 0 }; g.n++; if (!s.fresh) g.ready++; }
-  const scrolls = Object.entries(groups).map(([k, g]) => `
-    <span class="scroll" title="${esc(SCROLL_INFO[k].desc)}">${SCROLL_INFO[k].ico} ${esc(v.scrollNames[k])}${g.n > 1 ? ' ×' + g.n : ''}
-      ${k === 'vp' ? '<span class="hint">+1 VP</span>' : `<button class="btn small" data-play="${k}" ${canPlay && g.ready ? '' : 'disabled'} title="${g.ready ? '' : 'Bought this turn — play it next turn'}">Play</button>`}
-    </span>`).join('');
+  // your development cards, each with its rules text on the card
+  const scrolls = Object.entries(groups).map(([k, g]) => {
+    let foot;
+    if (k === 'vp') foot = '<span class="dc-note">Counts automatically · never played</span>';
+    else if (!g.ready) foot = '<span class="dc-note">New — playable next turn</span>';
+    else foot = `<button class="btn small primary" data-play="${k}" ${canPlay ? '' : 'disabled'}
+      title="${canPlay ? '' : t.devPlayed ? 'You already played a development card this turn' : 'Play it on your own turn'}">Play</button>`;
+    return `<div class="devcard ${k}">
+      <div class="dc-head"><span class="dc-ico">${SCROLL_INFO[k].ico}</span><b>${esc(v.scrollNames[k])}</b>${g.n > 1 ? `<span class="dc-n">×${g.n}</span>` : ''}</div>
+      <p>${esc(SCROLL_INFO[k].desc)}</p>
+      <div class="dc-foot">${foot}</div></div>`;
+  }).join('');
   $('#dock').innerHTML = `
     <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
-    ${scrolls ? `<div class="scrolls">${scrolls}</div>` : ''}`;
+    ${scrolls ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
   $('#dock').querySelectorAll('[data-build]').forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.build;
@@ -877,6 +980,7 @@ function renderDock(v) {
       else if (a === 'skipRoads') send({ type: 'skipRoads' });
       else if (a === 'trade') openModal('trade');
       else if (a === 'results') { S.hideOver = false; renderGame(S.v); }
+      else if (a === 'cardref') openModal('cardref');
     };
   });
   $('#dock').querySelectorAll('[data-play]').forEach((b) => {
@@ -1050,12 +1154,14 @@ function openModal(kind) {
 }
 function closeModal() { S.modal = null; $('#modal-root').innerHTML = ''; }
 
-function stepperGrid(prefix, counts, limits) {
+// limits: most you can pick of each resource (your hand) · cap: most you can pick in total (e.g. cards owed in a discard)
+function stepperGrid(prefix, counts, limits, cap) {
+  const full = cap !== undefined && cnt(counts) >= cap;
   return `<div class="steppers">${RES.map((r) => `<div class="stepper">
     <div class="ico">${RM[r].ico}</div><div class="n">${counts[r]}</div>
     ${limits ? `<div class="have">of ${limits[r]}</div>` : ''}
     <div class="ctl"><button class="btn small" data-step="${prefix}:${r}:-1" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
-    <button class="btn small" data-step="${prefix}:${r}:1" ${limits && counts[r] >= limits[r] ? 'disabled' : ''} aria-label="more ${RM[r].name}">+</button></div></div>`).join('')}</div>`;
+    <button class="btn small" data-step="${prefix}:${r}:1" ${(limits && counts[r] >= limits[r]) || full ? 'disabled' : ''} aria-label="more ${RM[r].name}">+</button></div></div>`).join('')}</div>`;
 }
 
 function renderModal(v) {
@@ -1077,8 +1183,15 @@ function renderModal(v) {
   if (kind === 'discard') {
     const need = v.pendingDiscard[v.me]; const c = S.ui.cards; const n = cnt(c);
     html = `<h2>The bandits strike!</h2><p>You hold more than ${v.settings.discardLimit} cards. Choose <b>${need}</b> to discard.</p>
-      ${stepperGrid('cards', c, hand)}
-      <div class="foot"><span class="hint" style="flex:1">${n} / ${need} selected</span><button class="btn primary" data-do="discard" ${n === need ? '' : 'disabled'}>Discard</button></div>`;
+      ${stepperGrid('cards', c, hand, need)}
+      <div class="foot"><span class="hint" style="flex:1">${n === need ? `<b>${n} / ${need}</b> selected — ready` : `${n} / ${need} selected`}</span><button class="btn primary" data-do="discard" ${n === need ? '' : 'disabled'}>Discard</button></div>`;
+  } else if (kind === 'cardref') {
+    html = `<h2>📜 Development cards</h2>
+      <p class="hint" style="margin:0">Cost 🐑🌾⛏️. You draw a random card. You may play one per turn, before or after rolling, but not on the turn you bought it.</p>
+      <div class="dc-row">${Object.keys(SCROLL_INFO).map((k) => `<div class="devcard ${k}">
+        <div class="dc-head"><span class="dc-ico">${SCROLL_INFO[k].ico}</span><b>${esc(v.scrollNames[k])}</b></div>
+        <p>${esc(SCROLL_INFO[k].desc)}</p></div>`).join('')}</div>
+      <div class="foot"><button class="btn" data-do="close">Close</button></div>`;
   } else if (kind === 'steal') {
     html = `<h2>🥷 Pick a card to steal</h2>
       <p class="hint" style="margin:0">Cards are face down and shuffled. Choose one from ${t.victims.length > 1 ? 'any player next to the bandit' : 'their hand'}.</p>
@@ -1147,6 +1260,8 @@ function renderModal(v) {
     b.onclick = () => {
       const [k, r, d] = b.dataset.step.split(':');
       const obj = k === 'cards' ? S.ui.cards : S.ui[k];
+      // discarding: never pick more than you owe or more than you hold
+      if (k === 'cards' && Number(d) > 0 && (cnt(obj) >= (S.v.pendingDiscard[S.v.me] || 0) || obj[r] >= (S.v.hand || {})[r])) return;
       obj[r] = Math.max(0, obj[r] + Number(d));
       renderModal(S.v);
     };
@@ -1179,7 +1294,7 @@ function renderModal(v) {
     };
   });
   const bd = root.querySelector('[data-backdrop]');
-  bd.onclick = (e) => { if (e.target === bd && ['trade', 'plenty', 'monopoly', 'counter', 'dice'].includes(kind)) closeModal(); };
+  bd.onclick = (e) => { if (e.target === bd && ['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(kind)) closeModal(); };
 }
 
 setInterval(() => {
@@ -1195,7 +1310,7 @@ setInterval(() => {
 // Shortcuts: R roll · E end turn / done building · T trade · 1–4 road/village/town/scroll · Esc cancel
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (['trade', 'plenty', 'monopoly', 'counter', 'dice'].includes(S.modal)) closeModal();
+    if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(S.modal)) closeModal();
     else if (S.mode) { S.mode = null; if (S.v) { renderDock(S.v); renderBoardDyn(S.v); } }
     return;
   }
