@@ -84,6 +84,18 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 .toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
 .toggle input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--accent); }
 .hint { color: var(--muted); font-size: 13px; }
+
+/* settings a non-host has changed in their draft */
+.field.changed, .toggle.changed { color: var(--accent); }
+.field.changed input, .field.changed select { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(181,84,45,.18); }
+.toggle.changed { background: rgba(181,84,45,.08); border-radius: 8px; padding: 4px 6px; margin: -4px -6px; }
+.suggestbar { margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 10px; background: rgba(181,84,45,.06); font-size: 14px; }
+.suggestions { margin-top: 18px; display: grid; gap: 8px; }
+.suggestions h3 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sugg { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; font-size: 14px; }
+.sugg .chip { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; }
+.sugg-what { font-weight: 600; }
+.sugg-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
 .dot.off { background: #b9ad9a; }

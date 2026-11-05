@@ -296,7 +296,7 @@ function renderLobby(v) {
   const n = v.players.length;
   const sizeAuto = n <= 4 ? 'small (19 tiles)' : 'large (37 tiles)';
   if (S.screen !== 'lobby') {
-    S.screen = 'lobby'; S.lastLog = 0; S.lobbyKey = null;
+    S.screen = 'lobby'; S.lastLog = 0; S.lobbyKey = null; S.draft = {};
     $('#app').innerHTML = `
     <div class="lobby">
       <div class="lobby-head">
@@ -316,10 +316,16 @@ function renderLobby(v) {
   }
   renderLog(v);
   closeModal();
+  noticeSuggestions(v);
   // Only rebuild the player/settings card when it actually changed, so chat doesn't wipe a half-typed setting.
-  const key = JSON.stringify([v.players, v.settings, v.hostId]);
+  const key = JSON.stringify([v.players, v.settings, v.hostId, v.suggestions, S.draft]);
   if (key === S.lobbyKey) return;
   S.lobbyKey = key;
+  // Host edits apply directly; everyone else edits a draft they can suggest.
+  const draft = S.draft || (S.draft = {});
+  for (const k of Object.keys(draft)) if (draft[k] === s[k]) delete draft[k];
+  const val = (k) => (!host && k in draft ? draft[k] : s[k]);
+  const chg = (k) => (!host && k in draft ? ' changed' : '');
   const hostP = v.players.find((p) => p.id === v.hostId);
   const canClaim = !host && (!hostP || !hostP.connected);
   $('#lobby-main').innerHTML = `
@@ -336,29 +342,34 @@ function renderLobby(v) {
       const taken = v.players.some((p) => p.color === c && p.id !== v.me);
       return `<button class="swatch ${me && me.color === c ? 'sel' : ''}" style="background:${PC[c]}" data-color="${c}" ${taken ? 'disabled' : ''} title="${c}" aria-label="${c}"></button>`;
     }).join('')}</div>
-    <h3 style="margin-top:18px">Game settings ${host ? '' : '<span class="hint">set by host</span>'}</h3>
+    <h3 style="margin-top:18px">Game settings ${host ? '' : '<span class="hint">change any of these to suggest it to the host</span>'}</h3>
     <div class="settings">
-      <label class="field">Points to win
-        <input type="number" min="5" max="20" id="s-vp" value="${s.vpTarget}" ${host ? '' : 'disabled'}></label>
-      <label class="field">Island size
-        <select id="s-size" ${host ? '' : 'disabled'}>
-          <option value="auto" ${s.boardSize === 'auto' ? 'selected' : ''}>Auto — ${sizeAuto} for ${n} players</option>
-          <option value="small" ${s.boardSize === 'small' ? 'selected' : ''}>Small — 19 tiles (best for 2–4)</option>
-          <option value="large" ${s.boardSize === 'large' ? 'selected' : ''}>Large — 37 tiles (best for 5–8)</option>
+      <label class="field${chg('vpTarget')}">Points to win
+        <input type="number" min="5" max="20" id="s-vp" value="${val('vpTarget')}"></label>
+      <label class="field${chg('boardSize')}">Island size
+        <select id="s-size">
+          <option value="auto" ${val('boardSize') === 'auto' ? 'selected' : ''}>Auto — ${sizeAuto} for ${n} players</option>
+          <option value="small" ${val('boardSize') === 'small' ? 'selected' : ''}>Small — 19 tiles (best for 2–4)</option>
+          <option value="large" ${val('boardSize') === 'large' ? 'selected' : ''}>Large — 37 tiles (best for 5–8)</option>
         </select></label>
-      <label class="field">Hand limit when a 7 is rolled
-        <input type="number" min="5" max="12" id="s-discard" value="${s.discardLimit}" ${host ? '' : 'disabled'}></label>
-      <label class="toggle"><input type="checkbox" id="s-builder" ${s.builderPhase ? 'checked' : ''} ${host ? '' : 'disabled'}>
+      <label class="field${chg('discardLimit')}">Hand limit when a 7 is rolled
+        <input type="number" min="5" max="12" id="s-discard" value="${val('discardLimit')}"></label>
+      <label class="toggle${chg('builderPhase')}"><input type="checkbox" id="s-builder" ${val('builderPhase') ? 'checked' : ''}>
         <span><b>Builder phase</b><br><span class="hint">After each turn, the other players may build (no trading). Recommended for 5+ players.</span></span></label>
-      <label class="field">Turn timer
-        <select id="s-timer" ${host ? '' : 'disabled'}>
+      <label class="field${chg('turnTimer')}">Turn timer
+        <select id="s-timer">
           ${[[0, 'Off — wait as long as it takes'], [60, '1 minute'], [90, '1½ minutes'], [120, '2 minutes'], [180, '3 minutes']].map(([sec, label]) =>
-            `<option value="${sec}" ${(s.turnTimer || 0) === sec ? 'selected' : ''}>${label}</option>`).join('')}
+            `<option value="${sec}" ${(val('turnTimer') || 0) === sec ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
         <span class="hint" style="font-weight:400">When time runs out the game plays for you (rolls, discards at random, ends the turn). Short steps like discarding get at most 1 minute.</span></label>
-      <label class="toggle"><input type="checkbox" id="s-friendly" ${s.friendlyBandit ? 'checked' : ''} ${host ? '' : 'disabled'}>
+      <label class="toggle${chg('friendlyBandit')}"><input type="checkbox" id="s-friendly" ${val('friendlyBandit') ? 'checked' : ''}>
         <span><b>Friendly bandit</b><br><span class="hint">The bandit can't be placed next to players with 2 or fewer points. Nice for newer players.</span></span></label>
     </div>
+    ${!host && Object.keys(draft).length ? `<div class="suggestbar">
+        <span style="flex:1">Your suggestion: <b>${describeChanges(s, draft)}</b></span>
+        <button class="btn small" id="draft-reset">Reset</button>
+        <button class="btn small primary" id="draft-send">Suggest to host</button></div>` : ''}
+    ${renderSuggestions(v, host)}
     <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       ${host ? `<button class="btn primary" id="start" ${n < 2 ? 'disabled' : ''}>Start game</button><span class="hint" style="flex:1">${n < 2 ? 'Waiting for at least one more player…' : `Ready with ${n} players.`}</span>`
         : `<span class="hint" style="flex:1">Waiting for the host to start the game…</span>${canClaim ? '<button class="btn" id="claim">Host is offline — become host</button>' : ''}`}
@@ -366,15 +377,27 @@ function renderLobby(v) {
     </div>`;
   document.querySelectorAll('[data-color]').forEach((b) => { b.onclick = () => send({ type: 'setColor', color: b.dataset.color }); });
   document.querySelectorAll('[data-kick]').forEach((b) => { b.onclick = () => send({ type: 'kick', pid: b.dataset.kick }); });
-  if (host) {
-    const upd = (patch) => send({ type: 'settings', settings: patch });
-    $('#s-vp').onchange = (e) => upd({ vpTarget: e.target.value });
-    $('#s-discard').onchange = (e) => upd({ discardLimit: e.target.value });
+  bindSuggestions(v);
+  {
+    // host: apply now · others: add to the draft
+    const upd = (patch) => {
+      if (host) return send({ type: 'settings', settings: patch });
+      Object.assign(S.draft, patch);
+      renderLobby(S.v);
+    };
+    $('#s-vp').onchange = (e) => upd({ vpTarget: Math.max(5, Math.min(20, Math.round(Number(e.target.value)) || 10)) });
+    $('#s-discard').onchange = (e) => upd({ discardLimit: Math.max(5, Math.min(12, Math.round(Number(e.target.value)) || 7)) });
     $('#s-size').onchange = (e) => upd({ boardSize: e.target.value });
     $('#s-builder').onchange = (e) => upd({ builderPhase: e.target.checked });
     $('#s-timer').onchange = (e) => upd({ turnTimer: Number(e.target.value) });
     $('#s-friendly').onchange = (e) => upd({ friendlyBandit: e.target.checked });
-    $('#start').onclick = () => send({ type: 'start' });
+  }
+  if (host) $('#start').onclick = () => send({ type: 'start' });
+  if ($('#draft-reset')) $('#draft-reset').onclick = () => { S.draft = {}; renderLobby(S.v); };
+  if ($('#draft-send')) {
+    $('#draft-send').onclick = async () => {
+      if (await send({ type: 'suggest', settings: S.draft })) { S.draft = {}; renderLobby(S.v); toast('Suggestion sent to the host'); }
+    };
   }
   if ($('#claim')) $('#claim').onclick = () => send({ type: 'claimHost' });
   $('#leave').onclick = async () => {
@@ -383,6 +406,67 @@ function renderLobby(v) {
     if (await send({ type: 'leave' })) { forget(S.code); S.v = null; history.replaceState(null, '', '/'); renderHome(); }
     else connect();
   };
+}
+
+// ---------- settings suggestions ----------
+const SETTING_TEXT = {
+  vpTarget: ['Points to win', (x) => x],
+  boardSize: ['Island', (x) => x],
+  discardLimit: ['Hand limit', (x) => x],
+  builderPhase: ['Builder phase', (x) => (x ? 'on' : 'off')],
+  turnTimer: ['Turn timer', (x) => (x ? `${x / 60} min` : 'off')],
+  friendlyBandit: ['Friendly bandit', (x) => (x ? 'on' : 'off')],
+};
+function describeChanges(cur, changes) {
+  return Object.entries(changes)
+    .map(([k, x]) => esc(`${SETTING_TEXT[k][0]} ${SETTING_TEXT[k][1](cur[k])} → ${SETTING_TEXT[k][1](x)}`))
+    .join(' · ');
+}
+
+function renderSuggestions(v, host) {
+  const list = v.suggestions || [];
+  if (!list.length) return '';
+  const n = v.players.length;
+  return `<div class="suggestions"><h3>Suggestions <span class="hint">${host ? 'votes are advice — you decide' : 'the host decides'}</span></h3>${list.map((sg) => {
+    const votes = Object.entries(sg.votes);
+    const yes = votes.filter(([, x]) => x === 1).map(([id]) => pname(v, id));
+    const no = votes.filter(([, x]) => x === -1).map(([id]) => pname(v, id));
+    const mine = sg.votes[v.me] || 0;
+    const by = v.players.find((p) => p.id === sg.by);
+    return `<div class="sugg">
+      <div>${chip(by ? by.color : '#999')} <b>${esc(pname(v, sg.by))}</b> suggests</div>
+      <div class="sugg-what">${describeChanges(v.settings, sg.changes)}</div>
+      <div class="sugg-row">
+        <button class="btn small ${mine === 1 ? 'on' : ''}" data-vote="${sg.id}:1" title="${esc(yes.join(', ') || 'No votes yet')}" aria-pressed="${mine === 1}">👍 ${yes.length}</button>
+        <button class="btn small ${mine === -1 ? 'on' : ''}" data-vote="${sg.id}:-1" title="${esc(no.join(', ') || 'No votes yet')}" aria-pressed="${mine === -1}">👎 ${no.length}</button>
+        <span class="hint" style="flex:1">${yes.length} of ${n} in favor${yes.length > n / 2 ? ' · <b>majority</b>' : ''}</span>
+        ${host ? `<button class="btn small" data-sugg-dismiss="${sg.id}">Dismiss</button><button class="btn small primary" data-sugg-apply="${sg.id}">Apply</button>`
+          : sg.by === v.me ? `<button class="btn small" data-sugg-dismiss="${sg.id}">Withdraw</button>` : ''}
+      </div></div>`;
+  }).join('')}</div>`;
+}
+
+function bindSuggestions(v) {
+  document.querySelectorAll('[data-vote]').forEach((b) => {
+    b.onclick = () => {
+      const [id, x] = b.dataset.vote.split(':');
+      const sg = v.suggestions.find((q) => q.id === id);
+      send({ type: 'vote', id, value: sg && sg.votes[v.me] === Number(x) ? 0 : Number(x) }); // clicking your vote again clears it
+    };
+  });
+  document.querySelectorAll('[data-sugg-apply]').forEach((b) => { b.onclick = () => send({ type: 'applySuggestion', id: b.dataset.suggApply }); });
+  document.querySelectorAll('[data-sugg-dismiss]').forEach((b) => { b.onclick = () => send({ type: 'dismissSuggestion', id: b.dataset.suggDismiss }); });
+}
+
+// toast + chime when someone else posts a new suggestion
+function noticeSuggestions(v) {
+  const ids = new Set((v.suggestions || []).map((x) => x.id));
+  if (S.seenSugg) {
+    for (const sg of v.suggestions || []) {
+      if (!S.seenSugg.has(sg.id) && sg.by !== v.me) { toast(`💡 ${pname(v, sg.by)} suggested a settings change`); chime('trade'); }
+    }
+  }
+  S.seenSugg = ids;
 }
 
 function bindChat() {

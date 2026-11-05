@@ -826,14 +826,42 @@ function lobbyAction(game, p, a) {
       if (game.players.some((o) => o.color === a.color && o.id !== p.id)) fail('Color taken');
       p.color = a.color; break;
     case 'settings': {
-      if (!host) fail('Only the host can change settings');
-      const s = a.settings || {}; const cur = game.settings;
-      if (s.vpTarget !== undefined) cur.vpTarget = Math.max(5, Math.min(20, Math.round(Number(s.vpTarget)) || 10));
-      if (s.discardLimit !== undefined) cur.discardLimit = Math.max(5, Math.min(12, Math.round(Number(s.discardLimit)) || 7));
-      if (s.builderPhase !== undefined) cur.builderPhase = !!s.builderPhase;
-      if (s.friendlyBandit !== undefined) cur.friendlyBandit = !!s.friendlyBandit;
-      if (s.turnTimer !== undefined && [0, 60, 90, 120, 180].includes(Number(s.turnTimer))) cur.turnTimer = Number(s.turnTimer);
-      if (['auto', 'small', 'large'].includes(s.boardSize)) cur.boardSize = s.boardSize;
+      if (!host) fail('Only the host can change settings — use Suggest instead');
+      Object.assign(game.settings, cleanSettings(a.settings));
+      break;
+    }
+    // Non-hosts propose settings; everyone votes; the host applies or dismisses (votes never apply anything).
+    case 'suggest': {
+      if (host) fail('As host, just change the setting directly');
+      const changes = cleanSettings(a.settings);
+      for (const k of Object.keys(changes)) if (changes[k] === game.settings[k]) delete changes[k];
+      if (!Object.keys(changes).length) fail('That matches the current settings');
+      game.suggestions = (game.suggestions || []).filter((x) => x.by !== p.id); // one open suggestion each
+      game.suggestions.push({ id: rid(4), by: p.id, changes, votes: { [p.id]: 1 }, at: Date.now() });
+      log(game, `💡 ${p.name} suggested: ${describeChanges(game, changes)}.`);
+      break;
+    }
+    case 'vote': {
+      const sg = (game.suggestions || []).find((x) => x.id === a.id);
+      if (!sg) fail('That suggestion is gone');
+      const val = Number(a.value);
+      if (val === 1 || val === -1) sg.votes[p.id] = val; else delete sg.votes[p.id];
+      break;
+    }
+    case 'applySuggestion':
+    case 'dismissSuggestion': {
+      const i = (game.suggestions || []).findIndex((x) => x.id === a.id);
+      if (i < 0) fail('That suggestion is gone');
+      const sg = game.suggestions[i];
+      if (a.type === 'applySuggestion') {
+        if (!host) fail('Only the host can apply suggestions');
+        Object.assign(game.settings, sg.changes);
+        log(game, `✅ ${p.name} applied ${P(game, sg.by)?.name || 'someone'}'s suggestion: ${describeChanges(game, sg.changes)}.`);
+      } else {
+        if (!host && sg.by !== p.id) fail('Only the host or the person who suggested it can remove it');
+        log(game, sg.by === p.id ? `${p.name} withdrew their suggestion.` : `${p.name} dismissed ${P(game, sg.by)?.name || 'someone'}'s suggestion.`);
+      }
+      game.suggestions.splice(i, 1);
       break;
     }
     case 'kick': {
@@ -855,9 +883,46 @@ function lobbyAction(game, p, a) {
     }
     case 'start':
       if (!host) fail('Only the host can start');
-      startGame(game); break;
+      startGame(game); game.suggestions = []; break;
     default: fail('The game has not started yet');
   }
+  pruneSuggestions(game);
+}
+
+// Keep only valid settings keys, clamped to their allowed values.
+function cleanSettings(s) {
+  s = s || {};
+  const out = {};
+  if (s.vpTarget !== undefined) out.vpTarget = Math.max(5, Math.min(20, Math.round(Number(s.vpTarget)) || 10));
+  if (s.discardLimit !== undefined) out.discardLimit = Math.max(5, Math.min(12, Math.round(Number(s.discardLimit)) || 7));
+  if (s.builderPhase !== undefined) out.builderPhase = !!s.builderPhase;
+  if (s.friendlyBandit !== undefined) out.friendlyBandit = !!s.friendlyBandit;
+  if (s.turnTimer !== undefined && [0, 60, 90, 120, 180].includes(Number(s.turnTimer))) out.turnTimer = Number(s.turnTimer);
+  if (['auto', 'small', 'large'].includes(s.boardSize)) out.boardSize = s.boardSize;
+  return out;
+}
+
+const SETTING_LABEL = {
+  vpTarget: (v) => `points to win ${v}`,
+  boardSize: (v) => `island ${v}`,
+  discardLimit: (v) => `hand limit ${v}`,
+  builderPhase: (v) => `builder phase ${v ? 'on' : 'off'}`,
+  turnTimer: (v) => `turn timer ${v ? `${v / 60} min` : 'off'}`,
+  friendlyBandit: (v) => `friendly bandit ${v ? 'on' : 'off'}`,
+};
+function describeChanges(game, changes) {
+  return Object.entries(changes).map(([k, v]) => SETTING_LABEL[k](v)).join(', ');
+}
+
+// Drop suggestion parts the host already made true, and anything from players who left.
+function pruneSuggestions(game) {
+  const ids = new Set(game.players.map((p) => p.id));
+  game.suggestions = (game.suggestions || []).filter((sg) => {
+    if (!ids.has(sg.by)) return false;
+    for (const k of Object.keys(sg.changes)) if (sg.changes[k] === game.settings[k]) delete sg.changes[k];
+    for (const id of Object.keys(sg.votes)) if (!ids.has(id)) delete sg.votes[id];
+    return Object.keys(sg.changes).length > 0;
+  });
 }
 
 function phaseHint(phase) {
@@ -915,7 +980,11 @@ function viewFor(game, pid) {
     log: game.log.filter((l) => !l.to || l.to === pid).slice(-120).map(({ to, ...l }) => (to ? { ...l, private: true } : l)),
   };
   if (game.status === 'lobby') {
-    return { ...base, players: game.players.map((p) => ({ id: p.id, name: p.name, color: p.color, connected: p.connected })) };
+    return {
+      ...base,
+      players: game.players.map((p) => ({ id: p.id, name: p.name, color: p.color, connected: p.connected })),
+      suggestions: game.suggestions || [],
+    };
   }
   const t = game.turn; const over = game.status === 'over';
   const cur = current(game);

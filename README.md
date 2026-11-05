@@ -52,6 +52,8 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 
 ## Quality of life
 
+- **Settings suggestions:** in the lobby anyone can change a setting. For non-hosts that makes a draft they can send to the host as a suggestion. Everyone can vote 👍/👎, and the host applies or dismisses it; votes never change settings by themselves.
+
 - **Turn timer** (optional, 1–3 minutes): when time runs out the game plays for you. It rolls, discards at random, moves the bandit, or ends the turn. Short steps like discarding get at most 1 minute.
 - **Friendly bandit** (optional): the bandit can't be placed next to players with 2 or fewer points.
 - **Lost your seat?** Join the room with the exact same name and you'll get it back, as long as that seat is offline.
