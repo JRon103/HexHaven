@@ -305,7 +305,7 @@ function showDice(v, roll) {
   el.className = 'dicefx';
   el.style.setProperty('--c', pcolor(v, roll.by));
   el.innerHTML = `<div class="dicefx-dice">${roll.d.map(() => `<div class="die3d"><div class="dshadow"></div><div class="cube">${
-    CUBE_FACES.map(([f, n]) => `<div class="face ${f}">${dieSvg(n)}</div>`).join('')}</div></div>`).join('')}</div>
+    CUBE_FACES.map(([f, n]) => `<div class="face ${f}">${pipsSvg(n)}</div>`).join('')}</div></div>`).join('')}</div>
     <div class="fx-label">${label}</div>`;
   fx.appendChild(el);
 
@@ -766,9 +766,16 @@ function renderStatus(v) {
   $('#vp-target').textContent = `first to ${v.settings.vpTarget}`;
 }
 
+const PIP_SPOTS = { 1: [[2, 2]], 2: [[1, 1], [3, 3]], 3: [[1, 1], [2, 2], [3, 3]], 4: [[1, 1], [3, 1], [1, 3], [3, 3]], 5: [[1, 1], [3, 1], [2, 2], [1, 3], [3, 3]], 6: [[1, 1], [3, 1], [1, 2], [3, 2], [1, 3], [3, 3]] };
+
+// flat die (top bar): a rounded square with pips
 function dieSvg(n) {
-  const P = { 1: [[2, 2]], 2: [[1, 1], [3, 3]], 3: [[1, 1], [2, 2], [3, 3]], 4: [[1, 1], [3, 1], [1, 3], [3, 3]], 5: [[1, 1], [3, 1], [2, 2], [1, 3], [3, 3]], 6: [[1, 1], [3, 1], [1, 2], [3, 2], [1, 3], [3, 3]] }[n];
-  return `<svg viewBox="0 0 40 40" aria-label="die ${n}"><rect x="2" y="2" width="36" height="36" rx="8" fill="#fffaf0" stroke="#2b2118" stroke-width="2"/>${P.map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.6" fill="#2b2118"/>`).join('')}</svg>`;
+  return `<svg viewBox="0 0 40 40" aria-label="die ${n}"><rect x="2" y="2" width="36" height="36" rx="8" fill="#fffaf0" stroke="#2b2118" stroke-width="2"/>${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.6" fill="#2b2118"/>`).join('')}</svg>`;
+}
+
+// pips only, for the faces of the 3D dice — the face itself is a solid square so the cube has no gaps
+function pipsSvg(n) {
+  return `<svg viewBox="0 0 40 40" aria-hidden="true">${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.8" fill="#2b2118"/>`).join('')}</svg>`;
 }
 
 // ---------- board ----------

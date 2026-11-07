@@ -175,9 +175,10 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 /* 3D dice: a 64px cube per die, its six faces pushed out by half its size */
 .die3d { --s: 64px; width: var(--s); height: var(--s); position: relative; perspective: 520px; }
 .cube { position: absolute; inset: 0; transform-style: preserve-3d; }
-.cube .face { position: absolute; inset: 0; }
+/* each face is a solid square (no rounded corners, no margin) so the cube has no gaps to see through */
+.cube .face { position: absolute; inset: 0; background: linear-gradient(145deg, #fffdf8, #efe3c8); border: 3px solid var(--c, #2b2118);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.7), inset 0 -6px 10px rgba(120,90,50,.18); }
 .cube .face svg { width: 100%; height: 100%; display: block; }
-.cube .face svg rect { stroke: var(--c, #2b2118); stroke-width: 3; }
 .cube .front { transform: translateZ(calc(var(--s) / 2)); }
 .cube .back { transform: rotateY(180deg) translateZ(calc(var(--s) / 2)); }
 .cube .right { transform: rotateY(90deg) translateZ(calc(var(--s) / 2)); }
@@ -192,7 +193,7 @@ label.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); fon
 
 /* rolling a 7: red label, red dice outline, a red pulse over the board, a banner until it's resolved */
 .dicefx.seven .fx-label { background: #b3261e; font-size: 18px; font-weight: 700; padding: 8px 18px; box-shadow: 0 0 0 3px rgba(255,255,255,.85); }
-.dicefx.seven .cube .face svg rect { stroke: #b3261e; stroke-width: 4; }
+.dicefx.seven .cube .face { border-color: #b3261e; }
 .bandit-flash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 6px #d33, inset 0 0 120px 30px rgba(200,30,30,.55); animation: flash 1.5s ease-out forwards; }
 @keyframes flash { 0% { opacity: 0; } 15% { opacity: 1; } 35% { opacity: .5; } 50% { opacity: 1; } 100% { opacity: 0; } }
 .seven-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 110px); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
