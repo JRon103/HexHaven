@@ -59,6 +59,7 @@ async function api(path, body) {
 }
 
 async function send(action) {
+  if (S.replay) return false; // a replay is read-only
   try { await api('/api/action', { code: S.code, token: S.token, action }); return true; }
   catch (e) { toast(e.message, true); return false; }
 }
@@ -178,8 +179,15 @@ function renderHome(prefill = '') {
         <label class="field">Room code<input type="text" name="code" maxlength="4" value="${esc(prefill)}" style="text-transform:uppercase;letter-spacing:3px" required></label>
         <label class="field">Your name<input type="text" name="name" maxlength="20" autocomplete="nickname" required></label>
         <button class="btn ${rejoin ? '' : 'primary'}" type="submit">Join room</button>
+        <div id="join-seats"></div>
         <div class="hint">Lost your seat (new device, cleared browser)? Join with the exact same name to take it back.</div>
       </form>
+    </div>
+    <div class="card rules" id="load-card">
+      <h3>Load or replay a saved game</h3>
+      <p class="hint" style="margin:-4px 0 12px">Hosts can save a game any time with 💾; everyone can once it's over. Open the file here to watch the replay or keep playing from where it stopped.</p>
+      <label class="btn filebtn">📂 Choose a save file<input type="file" id="load-file" accept=".json,application/json" hidden></label>
+      <div id="load-info"></div>
     </div>
     ${recent.length ? `<div class="card rules"><h3>Your recent rooms</h3><div class="invite">${recent.map(([c, s]) => `<button class="btn small" data-recent="${esc(c)}">${esc(c)} · ${esc(s.name)}</button>`).join('')}</div></div>` : ''}
     <div class="card rules">
@@ -206,8 +214,11 @@ function renderHome(prefill = '') {
   $('#f-join').onsubmit = async (e) => {
     e.preventDefault();
     const name = e.target.name.value; const code = e.target.code.value.trim().toUpperCase();
-    try { const r = await api('/api/join', { code, name }); enterRoom(r.code, r.token, r.pid, name); } catch (err) { toast(err.message, true); }
+    try { const r = await api('/api/join', { code, name }); enterRoom(r.code, r.token, r.pid, name); }
+    catch (err) { if (!(/already started/.test(err.message) && await offerSeats(code))) toast(err.message, true); }
   };
+  bindLoadCard();
+  if (prefill) offerSeats(prefill); // invite link to a running game: show its seats right away (alongside any "Rejoin")
   const rj = $('#rejoin');
   if (rj) rj.onclick = () => enterRoom(prefill, rejoin.token, rejoin.pid, rejoin.name);
   document.querySelectorAll('[data-recent]').forEach((b) => {
@@ -248,7 +259,7 @@ function applyMotion() {
 }
 applyMotion();
 function chime(kind) {
-  if (!soundOn()) return;
+  if (!soundOn() || S.replay) return;
   try {
     const ctx = S.audio || (S.audio = new (window.AudioContext || window.webkitAudioContext)());
     const notes = kind === 'trade' ? [660, 880] : kind === 'seven' ? [392, 311, 233] : [523, 659, 784];
@@ -655,11 +666,12 @@ function renderGame(v) {
     <div class="game">
       <header class="topbar">
         <span class="brand">${LOGO_SVG}Hexhaven</span>
-        <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>
+        <span class="roomtag" id="roomtag" title="${S.replay ? 'Watching a replay' : 'Copy invite link'}">${S.replay ? '▶ Replay' : 'Room ' + esc(v.code)}</span>
         <div class="status" id="status"></div>
         <span class="conn" id="conn"></span>
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
         <div class="dice" id="dice"></div>
+        <button class="btn small" id="savebtn" title="Download this game as a save file" hidden>💾 Save</button>
         <button class="btn small" id="motion" aria-label="Animations">✨</button>
         <button class="btn small" id="mute" title="Sound on/off"></button>
       </header>
@@ -690,7 +702,8 @@ function renderGame(v) {
         </section>
       </aside>
     </div>`;
-    $('#roomtag').onclick = copyInvite;
+    $('#roomtag').onclick = () => { if (!S.replay) copyInvite(); };
+    $('#savebtn').onclick = downloadSave;
     $('#stats-more').onclick = () => openModal('dice');
     $('#board').addEventListener('click', onBoardClick);
     bindZoom();
@@ -712,7 +725,9 @@ function renderGame(v) {
   renderStatus(v);
   renderBoardStatic(v);
   renderBoardDyn(v);
-  renderDock(v);
+  if (S.replay) renderReplayBar(v); else renderDock(v);
+  $('#savebtn').hidden = !!S.replay || !canSave(v);
+  $('#chat').hidden = !!S.replay;
   renderPlayers(v);
   renderTrade(v);
   renderStats(v);
@@ -1182,10 +1197,10 @@ function renderPlayers(v) {
     const waiting = v.status === 'playing' && stalled.includes(p.id);
     const canSkip = waiting && p.id !== v.me && (host || !p.connected);
     const vpTxt = p.vpTotal !== null && p.vpTotal !== p.vp ? `${p.vpTotal}<span class="hint" title="includes hidden Monuments"> (${p.vp} shown)</span>` : p.vp;
-    return `<div class="pl ${turnOf ? 'cur' : ''} ${p.connected ? '' : 'off'}" style="--pc:${PC[p.color]}">
+    return `<div class="pl ${turnOf ? 'cur' : ''} ${p.connected || S.replay ? '' : 'off'}" style="--pc:${PC[p.color]}">
       <div class="pl-top">${chip(p.color)}<span class="pl-name">${esc(p.name)}${p.id === v.me ? ' <span class="hint">(you)</span>' : ''}</span>
         ${p.id === v.hostId ? '<span class="badge">host</span>' : ''}
-        ${p.connected ? '' : '<span class="badge">offline</span>'}
+        ${p.connected || S.replay ? '' : '<span class="badge">offline</span>'}
         <span class="pl-vp" title="victory points">${vpTxt}</span></div>
       <div class="pl-stats">
         <span title="resource cards">🃏 ${p.cards}</span><span title="scrolls">📜 ${p.scrolls}</span>
@@ -1194,10 +1209,12 @@ function renderPlayers(v) {
         ${v.turn.phase === 'order' && v.order.rolls[p.id] !== undefined ? `<span class="badge award">🎲 ${v.order.rolls[p.id]}</span>` : ''}
         ${waiting ? '<span class="badge">⏳ acting</span>' : ''}
         ${canSkip ? '<button class="btn small" data-skip>Skip</button>' : ''}
-      </div></div>`;
+      </div>
+      ${S.replay && p.hand ? `<div class="pl-hand" title="Cards in hand">${RES.filter((r) => p.hand[r]).map((r) => `<span>${RM[r].ico}<b>${p.hand[r]}</b></span>`).join('') || '<span class="hint">no cards</span>'}</div>` : ''}
+      </div>`;
   }).join('');
   const hostP = v.players.find((p) => p.id === v.hostId);
-  if (!host && (!hostP || !hostP.connected)) {
+  if (!S.replay && !host && (!hostP || !hostP.connected)) {
     $('#players').insertAdjacentHTML('beforeend', '<button class="btn small" data-claim>Host is offline — become host</button>');
     $('#players [data-claim]').onclick = () => send({ type: 'claimHost' });
   }
@@ -1369,7 +1386,7 @@ function renderModal(v) {
   const t = v.turn; const hand = v.hand || zero();
   // forced modals take priority
   let kind = S.modal;
-  if (v.status === 'over') kind = 'over';
+  if (v.status === 'over' && !S.replay) kind = 'over';
   else if (t.phase === 'discard' && v.pendingDiscard[v.me]) { if (S.modal !== 'discard') { S.modal = 'discard'; S.ui = { cards: zero() }; } kind = 'discard'; }
   else if (t.phase === 'steal' && isMine(v)) kind = 'steal';
   else if (kind === 'discard') kind = null;
@@ -1459,6 +1476,9 @@ function renderModal(v) {
       <div class="scoreboard">${ranked.map((p) => `<div>${chip(p.color)}<b style="flex:1">${esc(p.name)}</b>
         ${p.longest ? '<span class="badge award">Route</span>' : ''}${p.army ? '<span class="badge award">Watch</span>' : ''}
         <span class="pl-vp">${p.vpTotal}</span></div>`).join('')}</div>
+      <div class="foot" style="justify-content:flex-start">
+        <button class="btn" data-do="replay">▶ Watch replay</button>
+        <button class="btn" data-do="download">💾 Download game</button></div>
       <div class="foot">${v.hostId === v.me ? '<button class="btn primary" data-do="rematch">Back to lobby for a rematch</button>' : '<span class="hint">The host can start a rematch.</span>'}
         <button class="btn" data-do="hide">View board</button></div>`;
     if (S.hideOver) { root.innerHTML = ''; return; }
@@ -1505,6 +1525,8 @@ function renderModal(v) {
       if (d === 'propose') { if (await send({ type: 'proposeTrade', give: S.ui.give, get: S.ui.get })) closeModal(); }
       if (d === 'counter') { if (await send({ type: 'respondTrade', id: S.ui.tradeId, counter: { give: S.ui.give, get: S.ui.get } })) closeModal(); }
       if (d === 'bank') { if (await send({ type: 'bankTrade', give: S.ui.bgive, get: S.ui.bget })) { S.ui.bgive = zero(); S.ui.bget = zero(); toast('Traded with the bank'); renderModal(S.v); } }
+      if (d === 'replay') { closeModal(); replayThisGame(); return; }
+      if (d === 'download') { downloadSave(); return; }
       if (d === 'rematch') { closeModal(); send({ type: 'rematch' }); }
     };
   });
@@ -1543,6 +1565,13 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || S.modal) return;
+  // replay: ← → step, Space play/pause, Home / End jump
+  if (S.replay) {
+    const R = S.replay;
+    const keys = { ArrowLeft: () => { replayPlay(false); replayTo(R.n - 1, true); }, ArrowRight: () => { replayPlay(false); replayTo(R.n + 1); },
+      ' ': () => replayPlay(!R.playing), Home: () => { replayPlay(false); replayTo(0, true); }, End: () => { replayPlay(false); replayTo(R.rp.length, true); } };
+    if (keys[e.key]) { e.preventDefault(); keys[e.key](); return; }
+  }
   const key = { r: 'roll', e: 'end', t: 'trade', b: 'bank', 1: 'b-road', 2: 'b-village', 3: 'b-town', 4: 'b-scroll' }[e.key.toLowerCase()];
   if (S.screen === 'game' && ['+', '=', '-', '_', '0'].includes(e.key)) {
     e.preventDefault();
@@ -1554,5 +1583,285 @@ document.addEventListener('keydown', (e) => {
     : key === 'end' ? ($('[data-act="end"]') || $('[data-act="pass"]')) : $(`[data-act="${key}"]`);
   if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
 });
+
+// ---------- saves & replays ----------
+// The replay viewer runs the real rules engine in the browser: game.js, notation.js and save.js are served
+// from /lib and loaded with a tiny CommonJS shim (crypto is replaced by the browser's own).
+async function loadEngine() {
+  if (S.engine) return S.engine;
+  const v = encodeURIComponent((S.build && S.build.commit) || '');
+  const files = ['notation', 'game', 'save'];
+  const srcs = await Promise.all(files.map((f) => fetch(`/lib/${f}.js?v=${v}`).then((r) => {
+    if (!r.ok) throw new Error('Could not load the replay engine');
+    return r.text();
+  })));
+  const bytes = (n) => { const b = new Uint8Array(n); crypto.getRandomValues(b); return b; };
+  const cryptoShim = {
+    randomInt: (a, b) => { const [lo, hi] = b === undefined ? [0, a] : [a, b]; return lo + Math.floor(Math.random() * (hi - lo)); },
+    randomBytes: (n) => {
+      const b = bytes(n);
+      return { toString: () => [...b].map((x) => x.toString(16).padStart(2, '0')).join(''), readUInt32LE: (o = 0) => new DataView(b.buffer).getUint32(o, true) };
+    },
+  };
+  const mods = {};
+  const req = (name) => (name === 'crypto' ? cryptoShim : mods[name.replace('./', '')]);
+  files.forEach((f, i) => {
+    const module = { exports: {} };
+    new Function('module', 'exports', 'require', srcs[i])(module, module.exports, req); // eslint-disable-line no-new-func
+    mods[f] = module.exports;
+  });
+  return (S.engine = mods);
+}
+
+// Fetch the current game's save file (host any time, everyone once it's over).
+async function fetchSave() {
+  const r = await fetch(`/api/save?code=${encodeURIComponent(S.code)}&token=${encodeURIComponent(S.token)}`);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not save the game');
+  const name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || `hexhaven-${S.code}.json`;
+  return { name, text: await r.text() };
+}
+async function downloadSave() {
+  try {
+    const { name, text } = await fetchSave();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast(`💾 Saved ${name}`);
+  } catch (e) { toast(e.message, true); }
+}
+const canSave = (v) => v && v.board && (v.status === 'over' || v.hostId === v.me);
+
+// A short description of a save file for the load card.
+function saveSummary(file) {
+  const status = file.status === 'over' || file.winner ? `finished — ${esc((file.players.find((p) => p.seat === file.winner) || {}).name || '?')} won` : 'in progress';
+  const when = file.saved ? new Date(file.saved).toLocaleString() : '';
+  return `<div class="loadsum">
+    <div><b>Turn ${Number(file.turn && file.turn.number) || 0}</b> · ${file.players.length} players · ${status}${when ? ` · <span class="hint">saved ${esc(when)}</span>` : ''}</div>
+    <div class="loadsum-players">${file.players.map((p) => `<span style="--pc:${PC[p.color] || '#999'}">${chip(p.color)}${esc(p.name)} <span class="hint">seat ${p.seat}</span></span>`).join('')}</div>
+  </div>`;
+}
+
+// Home page: pick a save file, then watch it or continue it.
+function bindLoadCard() {
+  const input = $('#load-file');
+  if (!input) return;
+  input.onchange = async () => {
+    const f = input.files[0];
+    if (!f) return;
+    let file;
+    try { file = JSON.parse(await f.text()); } catch { return toast('That file is not valid JSON', true); }
+    if (!file || !file.hexhaven || !Array.isArray(file.players)) return toast('That file is not a Hexhaven save', true);
+    showLoadedFile(file);
+  };
+}
+function showLoadedFile(file) {
+  const box = $('#load-info');
+  const hasHistory = file.history && Array.isArray(file.history.moves) && file.history.start;
+  box.innerHTML = `${saveSummary(file)}
+    <div class="loadsum-actions">
+      <button class="btn" id="ld-replay" ${hasHistory ? '' : 'disabled title="This save has no history"'}>▶ Watch replay</button>
+      <button class="btn primary" id="ld-continue">Continue this game…</button>
+    </div>
+    <div id="ld-seats"></div>`;
+  $('#ld-replay').onclick = () => openReplay(file, { from: 'home' });
+  $('#ld-continue').onclick = () => {
+    $('#ld-seats').innerHTML = `<div class="hint" style="margin:8px 0 6px">Which seat are you? You'll be the host; friends join with the new room code and click their seat.</div>
+      <div class="seatpick">${file.players.map((p) => `<button class="btn" data-ldseat="${p.seat}" style="--pc:${PC[p.color] || '#999'}">${chip(p.color)} ${esc(p.name)}</button>`).join('')}</div>`;
+    document.querySelectorAll('[data-ldseat]').forEach((b) => { b.onclick = () => continueSave(file, Number(b.dataset.ldseat)); });
+  };
+}
+async function continueSave(file, seat) {
+  try {
+    const r = await api('/api/load', { seat, save: file });
+    const me = file.players.find((p) => p.seat === seat);
+    leaveReplayState();
+    enterRoom(r.code, r.token, r.pid, me ? me.name : 'Host');
+    (r.notes || []).forEach((n) => toast(n));
+  } catch (e) { toast(e.message, true); }
+}
+
+// Join screen: for a game already in progress, offer its seats (click yours) instead of a name field.
+async function offerSeats(code) {
+  let info;
+  try { info = await api(`/api/room?code=${encodeURIComponent(code)}`); } catch { return false; }
+  if (info.status === 'lobby') return false;
+  const free = info.players.filter((p) => !p.connected);
+  $('#join-seats').innerHTML = `<div class="hint" style="margin:6px 0">This game is already running — pick your seat:</div>
+    <div class="seatpick">${free.length ? free.map((p) => `<button type="button" class="btn" data-joinseat="${esc(p.name)}" style="--pc:${PC[p.color] || '#999'}">${chip(p.color)} ${esc(p.name)}</button>`).join('')
+      : '<span class="hint">Every seat is taken right now.</span>'}</div>`;
+  document.querySelectorAll('[data-joinseat]').forEach((b) => {
+    b.onclick = async () => {
+      try { const r = await api('/api/join', { code, name: b.dataset.joinseat }); enterRoom(r.code, r.token, r.pid, b.dataset.joinseat); }
+      catch (e) { toast(e.message, true); }
+    };
+  });
+  return true;
+}
+
+// ---------- replay viewer ----------
+const MOVE_TEXT = {
+  roll: 'rolled the dice', discard: 'discarded', moveBandit: 'moved the bandit', steal: 'stole a card', buildVillage: 'built a settlement',
+  buildTown: 'built a city', buildRoad: 'built a road', skipRoads: 'skipped free roads', buyScroll: 'bought a development card',
+  playScroll: 'played a development card', bankTrade: 'traded with the bank', proposeTrade: 'offered a trade', respondTrade: 'answered a trade',
+  confirmTrade: 'completed a trade', cancelTrade: 'withdrew a trade', endTurn: 'ended their turn', builderDone: 'finished building', skip: 'skipped a stalled player',
+};
+
+async function openReplay(file, opts = {}) {
+  let engine;
+  try { engine = await loadEngine(); } catch (e) { return toast(e.message, true); }
+  let rp;
+  try { rp = engine.save.replayer(file); } catch (e) { return toast(e.message, true); }
+  if (S.es) { S.es.close(); S.es = null; }
+  stopReplay();
+  S.replay = { file, rp, n: 0, playing: false, speed: 900, timer: null, from: opts.from || 'home', game: null };
+  S.screen = null; S.boardKey = null; S.prev = null; S.hideOver = true;
+  history.replaceState(null, '', '/?replay');
+  replayTo(opts.at === 'end' ? rp.length : 0, true);
+}
+
+function stopReplay() {
+  if (S.replay && S.replay.timer) clearInterval(S.replay.timer);
+  if (S.replay) S.replay.timer = null;
+}
+
+// Build what the screen shows from a replayed game: a spectator's view, plus everyone's hand and score.
+function replayView(game) {
+  const G2 = S.engine.game;
+  const v = G2.viewFor(game, '__replay');
+  v.me = '__replay';
+  for (const p of v.players) {
+    const real = game.players.find((x) => x.id === p.id);
+    p.hand = real.hand;
+    p.vpTotal = G2.viewFor(game, p.id).players.find((x) => x.id === p.id).vpTotal;
+  }
+  v.stalled = [];
+  v.deadlineIn = null;
+  return v;
+}
+
+function replayTo(n, jump) {
+  const R = S.replay;
+  if (!R) return;
+  const target = Math.max(0, Math.min(R.rp.length, n));
+  const res = R.rp.stateAt(target);
+  R.n = res.reached; R.game = res.game; R.error = res.error;
+  if (jump || Math.abs(target - (R.shown || 0)) > 1) S.prev = null; // no dice/turn effects when jumping around
+  R.shown = R.n;
+  S.v = replayView(R.game);
+  render();
+  if (R.error) { stopReplay(); R.playing = false; toast(`The history stops making sense at move ${R.error.at + 1} ("${R.error.line}")`, true); }
+}
+
+function replayPlay(on) {
+  const R = S.replay;
+  if (!R) return;
+  R.playing = on && R.n < R.rp.length;
+  stopReplay();
+  if (R.playing) {
+    R.timer = setInterval(() => {
+      if (!S.replay || S.replay.n >= S.replay.rp.length) { replayPlay(false); renderReplayBar(S.v); return; }
+      replayTo(S.replay.n + 1);
+    }, R.speed);
+  }
+  renderReplayBar(S.v);
+}
+
+function describeReplayMove(R) {
+  if (R.n === 0) return 'Start of the game';
+  const line = R.rp.moves[R.n - 1];
+  const tok = line.split(' ');
+  if (tok[0] === '-') return tok[1] === 'timeout' ? '⏱️ The turn timer ran out' : '🎲 New dice seed (a save was downloaded)';
+  const p = R.game.players.find((x) => x.seat === Number(tok[0]));
+  return `${p ? chip(p.color) + ' <b>' + esc(p.name) + '</b>' : 'Seat ' + esc(tok[0])} ${esc(MOVE_TEXT[tok[1]] || tok[1])}`;
+}
+
+function renderReplayBar(v) {
+  const R = S.replay;
+  const dock = $('#dock');
+  if (!R || !dock) return;
+  const len = R.rp.length;
+  dock.innerHTML = `<div class="replaybar">
+    <div class="rp-row">
+      <span class="rp-badge">▶ Replay</span>
+      <div class="rp-controls">
+        <button class="btn" data-rp="start" title="Start (Home)" aria-label="Go to start">⏮</button>
+        <button class="btn" data-rp="back" title="Previous move (←)" aria-label="Previous move">◀</button>
+        <button class="btn primary rp-play" data-rp="play" title="Play / pause (Space)">${R.playing ? '⏸ Pause' : '▶ Play'}</button>
+        <button class="btn" data-rp="fwd" title="Next move (→)" aria-label="Next move">▶</button>
+        <button class="btn" data-rp="end" title="End (End)" aria-label="Go to end">⏭</button>
+      </div>
+      <label class="rp-speed">Speed <select data-rp="speed">${[[1800, '½×'], [900, '1×'], [450, '2×'], [200, '4×']].map(([ms, l]) => `<option value="${ms}" ${R.speed === ms ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    </div>
+    <input class="rp-slider" type="range" min="0" max="${len}" value="${R.n}" aria-label="Move ${R.n} of ${len}">
+    <div class="rp-row">
+      <div class="rp-info"><span class="rp-count">Move ${R.n} / ${len} · Turn ${v.turn.number}</span> <span>${describeReplayMove(R)}</span></div>
+      <div class="rp-actions">
+        <button class="btn" data-rp="from-here" title="Start a new game from this exact moment">Play from here…</button>
+        <button class="btn" data-rp="download" title="Save this replay to your device">💾</button>
+        <button class="btn" data-rp="exit">Exit replay</button>
+      </div>
+    </div>
+    <div id="rp-seats"></div>
+  </div>`;
+  dock.querySelectorAll('[data-rp]').forEach((el) => {
+    const k = el.dataset.rp;
+    if (k === 'speed') { el.onchange = () => { R.speed = Number(el.value); if (R.playing) replayPlay(true); }; return; }
+    el.onclick = () => {
+      if (k === 'start') { replayPlay(false); replayTo(0, true); }
+      else if (k === 'back') { replayPlay(false); replayTo(R.n - 1, true); }
+      else if (k === 'fwd') { replayPlay(false); replayTo(R.n + 1); }
+      else if (k === 'end') { replayPlay(false); replayTo(len, true); }
+      else if (k === 'play') replayPlay(!R.playing);
+      else if (k === 'exit') exitReplay();
+      else if (k === 'download') downloadReplayFile();
+      else if (k === 'from-here') pickSeatFromHere();
+    };
+  });
+  const slider = dock.querySelector('.rp-slider');
+  slider.oninput = () => { replayPlay(false); replayTo(Number(slider.value), true); };
+}
+
+// "Play from here": a save of this exact moment whose history runs up to it, loaded as a new room.
+function fileAtMove() {
+  const R = S.replay; const eng = S.engine.save;
+  const snap = eng.exportSave(R.game);
+  return { ...snap, room: R.file.room, history: { seed: R.file.history.seed, start: R.file.history.start, moves: R.rp.moves.slice(0, R.n) } };
+}
+function pickSeatFromHere() {
+  const R = S.replay;
+  const file = fileAtMove();
+  $('#rp-seats').innerHTML = `<div class="hint" style="margin:8px 0 6px">Start a new room from move ${R.n}. Which seat are you? Friends join with the new code and click their seat.</div>
+    <div class="seatpick">${file.players.map((p) => `<button class="btn" data-rpseat="${p.seat}" style="--pc:${PC[p.color] || '#999'}">${chip(p.color)} ${esc(p.name)}</button>`).join('')}</div>`;
+  document.querySelectorAll('[data-rpseat]').forEach((b) => { b.onclick = () => continueSave(file, Number(b.dataset.rpseat)); });
+}
+function downloadReplayFile() {
+  const R = S.replay;
+  const text = S.engine.save.stringifySave(R.file);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = `hexhaven-${R.file.room || 'replay'}-replay.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+// Leave replay mode completely (playback, read-only actions, replay controls) so a live game can take over.
+function leaveReplayState() {
+  stopReplay();
+  S.replay = null; S.v = null; S.screen = null; S.boardKey = null; S.prev = null; S.hideOver = false;
+}
+function exitReplay() {
+  const from = S.replay && S.replay.from;
+  leaveReplayState();
+  if (from === 'game' && S.code && S.token) { history.replaceState(null, '', '?room=' + S.code); connect(); }
+  else { history.replaceState(null, '', '/'); renderHome(); }
+}
+// From the end-of-game window: fetch this game's save and watch it.
+async function replayThisGame() {
+  try {
+    const { text } = await fetchSave();
+    await openReplay(JSON.parse(text), { from: 'game', at: 'end' });
+  } catch (e) { toast(e.message, true); }
+}
 
 boot();

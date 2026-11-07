@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 const G = require('./game');
+const SAVE = require('./save');
 
 // Which code is running. On Cloud Run the deploy workflow passes APP_COMMIT / APP_BUILT and Cloud Run sets
 // K_REVISION; locally we ask git (and flag uncommitted changes as "+dirty").
@@ -94,6 +95,10 @@ const STATIC = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
+  // the rules, notation and save code, so the browser's replay viewer runs the real engine
+  '/lib/notation.js': ['../notation.js', 'text/javascript; charset=utf-8'],
+  '/lib/game.js': ['../game.js', 'text/javascript; charset=utf-8'],
+  '/lib/save.js': ['../save.js', 'text/javascript; charset=utf-8'],
 };
 
 function json(res, status, obj) {
@@ -101,10 +106,10 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-function readBody(req) {
+function readBody(req, limit = 20000) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 20000) { reject(new Error('Body too large')); req.destroy(); } });
+    req.on('data', (c) => { data += c; if (data.length > limit) { reject(new Error('Body too large')); req.destroy(); } });
     req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error('Bad JSON')); } });
   });
 }
@@ -143,6 +148,47 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/version') return json(res, 200, BUILD);
+
+    // Download the game as a save file: the host any time, everyone once the game is over.
+    if (req.method === 'GET' && url.pathname === '/api/save') {
+      const a = auth(url.searchParams.get('code'), url.searchParams.get('token'));
+      if (!a) return json(res, 404, { error: 'Session not found' });
+      const g = a.g;
+      if (g.status === 'lobby' || !g.board) return json(res, 400, { error: 'The game has not started yet' });
+      if (g.status !== 'over' && g.hostId !== a.p.id) return json(res, 403, { error: 'Only the host can save before the game ends' });
+      const text = SAVE.stringifySave(SAVE.exportSave(g, { build: BUILD.commit }));
+      if (g.status === 'playing') {
+        // the file holds the current seed: switch the live game to a fresh one so it can't predict the coming dice
+        G.reseed(g); save();
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Hexhaven-Build': BUILD.commit,
+        'Content-Disposition': `attachment; filename="hexhaven-${g.code}-turn${g.turn.number}${g.status === 'over' ? '-final' : ''}.json"`,
+      });
+      return res.end(text);
+    }
+
+    // Start a new room from a save file; the uploader takes the seat they pick and becomes host.
+    if (req.method === 'POST' && url.pathname === '/api/load') {
+      const body = await readBody(req, 3_000_000);
+      const code = newCode();
+      const { game, notes } = SAVE.importSave(body.save, code);
+      const me = game.players.find((p) => p.seat === Number(body.seat));
+      if (!me) return json(res, 400, { error: 'Pick the seat you want to play' });
+      game.hostId = me.id;
+      game.code = code;
+      game.log.push({ id: ++game.logSeq, t: Date.now(), msg: `💾 Game loaded from a save (turn ${game.turn.number}). Others rejoin with this room code by picking their seat.` });
+      for (const n of notes) game.log.push({ id: ++game.logSeq, t: Date.now(), msg: n });
+      rooms.set(code, game); save();
+      return json(res, 200, { code, token: me.token, pid: me.id, notes });
+    }
+
+    // Public room info, so the join screen can offer the seats of a game in progress.
+    if (req.method === 'GET' && url.pathname === '/api/room') {
+      const g = rooms.get(String(url.searchParams.get('code') || '').trim().toUpperCase());
+      if (!g) return json(res, 404, { error: 'No room with that code' });
+      return json(res, 200, { code: g.code, status: g.status, players: g.players.map((p) => ({ name: p.name, color: p.color, connected: p.connected })) });
+    }
 
     if (req.method === 'GET' && url.pathname === '/api/session') {
       const a = auth(url.searchParams.get('code'), url.searchParams.get('token'));

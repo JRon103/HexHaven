@@ -1,6 +1,7 @@
 'use strict';
 // Hexhaven rules engine. Pure state + actions; the server owns one game object per room.
 const crypto = require('crypto');
+const { encodeMove } = require('./notation');
 
 const RES = ['wood', 'clay', 'fleece', 'wheat', 'iron'];
 const RES_NAME = { wood: 'Wood', clay: 'Clay', fleece: 'Fleece', wheat: 'Wheat', iron: 'Iron' };
@@ -16,7 +17,18 @@ const COLORS = ['red', 'blue', 'ivory', 'orange', 'green', 'brown', 'purple', 't
 const MAX_PLAYERS = 8;
 const BASE_NUMS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
 
-const rint = (n) => crypto.randomInt(n);
+// All gameplay randomness (board, deck, dice, steals, auto-play) comes from the game's own seeded
+// generator (mulberry32 over game.rng.s), so a game is exactly reproducible from its seed and moves.
+// act()/tick() point CUR_RNG at the game being changed. Ids and tokens are not gameplay and stay random.
+let CUR_RNG = null;
+const newSeed = () => crypto.randomBytes(4).readUInt32LE(0);
+function rint(n) {
+  if (!CUR_RNG) return crypto.randomInt(n);
+  let t = (CUR_RNG.s = (CUR_RNG.s + 0x6d2b79f5) >>> 0);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * n);
+}
 const rid = (bytes) => crypto.randomBytes(bytes).toString('hex');
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = rint(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
@@ -151,7 +163,7 @@ function createGame(code) {
   return {
     code, createdAt: Date.now(), updatedAt: Date.now(), status: 'lobby', hostId: null,
     settings: { vpTarget: 10, builderPhase: true, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false },
-    players: [], log: [], logSeq: 0, version: 0,
+    players: [], log: [], logSeq: 0, version: 0, rng: { s: newSeed() },
   };
 }
 
@@ -187,6 +199,7 @@ function startGame(game) {
   const n = game.players.length;
   if (n < 2) fail('Need at least 2 players to start');
   const cfg = boardConfig(game.settings.boardSize, n);
+  game.players.forEach((p, i) => { p.seat = i + 1; }); // permanent seat numbers (turn order is the array order)
   // seats stay in lobby order; a roll-off decides who goes first, then play goes around the table
   for (const p of game.players) {
     p.hand = emptyHand(); p.scrolls = []; p.guards = 0; p.roadLen = 0;
@@ -213,6 +226,20 @@ function startGame(game) {
   game.lastRoll = null; game.rollSeq = 0;
   game.status = 'playing';
   log(game, 'Game started! Everyone rolls — highest roll goes first.');
+  startHistory(game);
+}
+
+// History = the game as it stood at the start + every move since, so it can be replayed exactly.
+function startHistory(game) {
+  game.history = { start: historyStart(game), moves: [] };
+}
+// a copy of the game good for replaying from: no secrets (tokens), no chat log, no nested history
+function historyStart(game) {
+  const { history, log: _log, ...rest } = game;
+  const copy = JSON.parse(JSON.stringify(rest));
+  for (const p of copy.players) { p.token = ''; p.connected = false; }
+  copy.log = []; copy.logSeq = 0;
+  return copy;
 }
 
 function rollDice(game, pid, kind) {
@@ -249,8 +276,8 @@ function orderRoll(game, p) {
 
 function resetToLobby(game) {
   for (const k of ['board', 'bank', 'deck', 'bandit', 'buildings', 'roads', 'longestHolder', 'armyHolder',
-    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal']) delete game[k];
-  for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces']) delete p[k];
+    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history']) delete game[k];
+  for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces', 'seat']) delete p[k];
   game.status = 'lobby';
   log(game, 'Back in the lobby — the host can start a new game.');
 }
@@ -469,7 +496,37 @@ function parseCards(obj) {
 
 // ---------- actions ----------
 
+// Gameplay moves that go into the history (chat, host hand-offs and lobby actions don't change the game).
+const RECORDED = new Set(['roll', 'discard', 'moveBandit', 'steal', 'buildVillage', 'buildTown', 'buildRoad', 'skipRoads', 'buyScroll',
+  'playScroll', 'bankTrade', 'proposeTrade', 'respondTrade', 'confirmTrade', 'cancelTrade', 'endTurn', 'builderDone', 'skip']);
+let depth = 0; // >0 while a move is being applied, so moves the game makes for someone (auto-play) aren't recorded twice
+
+// Run fn with this game's seeded randomness, restoring whatever was active before.
+function withRng(game, fn) {
+  if (!game.rng) game.rng = { s: newSeed() }; // rooms saved before seeds existed
+  const prev = CUR_RNG; CUR_RNG = game.rng; depth++;
+  try { return fn(); } finally { depth--; CUR_RNG = prev; }
+}
+
 function act(game, pid, a) {
+  const top = depth === 0;
+  const record = top && game.status === 'playing' && game.history && a && RECORDED.has(a.type);
+  let line = null;
+  if (record) { try { line = encodeMove(game, pid, a); } catch { /* malformed input: the rules below reject it */ } }
+  const result = withRng(game, () => actInner(game, pid, a));
+  if (line) game.history.moves.push(line);
+  return result;
+}
+
+// Switch the game to a fresh random seed (e.g. after the host downloads a save mid-game, so that file
+// can't predict the coming dice). Recorded in the history so replays still follow the real rolls.
+function reseed(game, seed = newSeed()) {
+  if (!game.rng) game.rng = { s: 0 };
+  game.rng.s = seed >>> 0;
+  if (game.history) game.history.moves.push(`- reseed ${game.rng.s}`);
+}
+
+function actInner(game, pid, a) {
   const p = P(game, pid);
   if (!p) fail('You are not in this game');
   if (!a || typeof a.type !== 'string') fail('Bad action');
@@ -975,11 +1032,19 @@ function bump(game) {
 // Called by the server about once a second; auto-plays for whoever ran out of time.
 function tick(game, now = Date.now()) {
   if (game.status !== 'playing' || !game.deadline || now < game.deadline) return false;
-  game.stallKey = null;
-  log(game, '⏱️ Time ran out.');
-  autoPlay(game);
-  bump(game);
+  if (game.history) game.history.moves.push('- timeout');
+  timeout(game);
   return true;
+}
+
+// What happens when the turn timer runs out (also used to replay a recorded "- timeout").
+function timeout(game) {
+  game.stallKey = null;
+  withRng(game, () => {
+    log(game, '⏱️ Time ran out.');
+    autoPlay(game);
+  });
+  bump(game);
 }
 
 function setConnected(game, pid, on) {
@@ -1057,4 +1122,5 @@ function viewFor(game, pid) {
   };
 }
 
-module.exports = { createGame, addPlayer, act, viewFor, setConnected, tick, RES, COST, MAX_PLAYERS, _internal: { roadLength, buildBoard, boardConfig, canPlaceRoad, canPlaceVillage, validRoads, handCount } };
+module.exports = { createGame, addPlayer, act, viewFor, setConnected, tick, timeout, reseed, newSeed, historyStart, RES, COST, MAX_PLAYERS, PIECES, COLORS,
+  _internal: { roadLength, buildBoard, boardConfig, canPlaceRoad, canPlaceVillage, validRoads, handCount, withRng, autoPlay, bump } };

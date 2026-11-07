@@ -80,10 +80,46 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - Every roll shows two 3D dice thrown onto the board. Animations are on by default; the ✨ button in the top bar turns them off (or back on) for that device. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
 - **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card · `Esc` cancel.
 
+## Saving, loading and replays
+
+- **Save:** the host can click **💾 Save** in the top bar at any time. Once the game is over, everyone can download it from the end-of-game window.
+- **Load:** on the home page, open **Load or replay a saved game**, pick the file, and choose **Continue this game**. Pick your seat and you become host of a new room. Friends open the new room's link and click their seat.
+- **Replay:** choose **Watch replay** (home page or end-of-game window). You can step move by move (← →), play/pause (Space), drag the slider, or change the speed. Everyone's hand is shown. **Play from here…** starts a new game from that exact moment.
+
+### The save file
+
+A save is a readable JSON file (about 1 KB per 10 turns). It has two parts: a **snapshot** of the game right now (what you load and edit) and a **history** (the starting position, the starting seed and every move), which replays the game exactly.
+
+```json
+{
+  "hexhaven": 1,
+  "seed": 416218545,
+  "players": [
+    { "seat": 1, "name": "ron", "color": "red", "hand": "Wo1 Fl1 Ir2", "devCards": ["guard", "vp*"], "guardsPlayed": 0 }
+  ],
+  "turnOrder": [3, 4, 1, 2],
+  "map": { "size": 2, "tiles": ["Wh10 Wo9 Cl6", "Fl5 Fl10 Cl3 De", "…"], "harbors": ["3:1 @ 1.1NW", "2:1 wheat @ 3.5E"], "bandit": "2.4" },
+  "pieces": { "1": { "settlements": ["1.2SE"], "cities": [], "roads": ["1.2SE", "1.3SW"] } },
+  "turn": { "number": 19, "player": 3, "phase": "main" },
+  "history": { "seed": 1189467210, "start": { "…": "the game as it started" }, "moves": ["1 roll", "1 buildVillage 7.4S", "1 buildRoad 7.4SE", "- timeout"] }
+}
+```
+
+- **Seats** are permanent numbers. `turnOrder` lists who plays first, second, and so on.
+- **Tiles** are listed row by row, top to bottom: `Wo` wood, `Cl` clay, `Fl` fleece, `Wh` wheat, `Ir` iron, `De` dunes, followed by the dice number.
+- **Positions** are `row.tile` counted from 1, plus a corner (`N NE SE S SW NW`) or a side (`NE E SE SW W NW`), e.g. `3.2SE`.
+- **Cards** are written like `Wo1 Cl2`. A development card ending in `*` was bought this turn.
+- **`seed`** drives the dice from here on. Leave it empty (`""`) for fresh random dice, or keep it to roll exactly the same dice again.
+- **Editing:** renaming players or changing colors keeps the history. Other edits (cards, pieces, the map…) are fine too: the game then continues from your edited snapshot and its replay starts there. Mistakes are reported in plain words, e.g. `Two players use the color red` or `Map row 2 needs 4 tiles`.
+- **Fair play:** a save shows everyone's cards and the deck order, which is why only the host can save mid-game. Right after a mid-game save, the live game switches to a fresh seed, so the file can't predict upcoming dice.
+
 ## Files
 
 - `server.js`: HTTP server. Clients send actions with POST and get live updates over Server-Sent Events.
 - `game.js`: rules engine. The server is authoritative, and each player sees only their own hand.
 - `public/`: browser client (board drawn as SVG).
+- `notation.js`: readable names for positions, cards and moves (shared with the browser).
+- `save.js`: save files: snapshot + history, loading (with friendly errors), and the replayer.
 - `test/sim.js`: headless bot self-play with invariant checks (`npm test`).
+- `test/save-test.js`: save, load, replay and hand-edit checks on bot games.
 - `test/bots.js`: fills a live room with bots for testing (`node test/bots.js ROOMCODE 5`).

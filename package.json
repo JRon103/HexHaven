@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/sim.js 40 6"
+    "test": "node test/sim.js 40 6 && node test/save-test.js 20"
   },
   "engines": {
     "node": "26.x"

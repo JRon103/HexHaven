@@ -32,6 +32,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* beats display rules like .btn { display: inline-flex } */
 html, body { margin: 0; }
 body { color: var(--ink); font: 15px/1.45 var(--sans); min-height: 100vh;
   background: radial-gradient(1100px 600px at 15% -10%, rgba(255,255,255,.5), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(150,110,60,.12), transparent 60%), var(--bg); background-attachment: fixed; }
@@ -456,3 +457,30 @@ html.reduce-motion :is(.timer.low, .timerbar.low > div) { animation: none; }
 
 /* animations toggle in the top bar: dimmed and struck through when off */
 #motion.off { opacity: .55; text-decoration: line-through; filter: grayscale(1); }
+
+/* ---------- saves & replays ---------- */
+.filebtn { cursor: pointer; }
+.loadsum { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); display: grid; gap: 8px; }
+.loadsum-players { display: flex; gap: 6px; flex-wrap: wrap; }
+.loadsum-players > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--pc); font-size: 13px; font-weight: 700; }
+.loadsum-players .chip, .seatpick .chip { width: 12px; height: 12px; display: inline-block; }
+.loadsum-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.seatpick { display: flex; gap: 8px; flex-wrap: wrap; }
+.seatpick .btn { border-left: 5px solid var(--pc); }
+
+/* replay controls take the place of the hand and build buttons */
+.replaybar { flex: 1 1 100%; display: grid; gap: 8px; }
+.rp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rp-badge { font-weight: 900; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--head-ink); background: linear-gradient(var(--head-1), var(--head-2)); padding: 5px 11px; border-radius: 99px; }
+.rp-controls { display: flex; gap: 6px; }
+.rp-controls .btn { min-width: 44px; font-size: 16px; }
+.rp-controls .rp-play { min-width: 110px; }
+.rp-speed { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.rp-speed select { width: auto; padding: 6px 8px; }
+.rp-slider { width: 100%; accent-color: var(--accent); height: 22px; }
+.rp-info { flex: 1; min-width: 220px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 15px; }
+.rp-info .chip { width: 12px; height: 12px; display: inline-block; vertical-align: -1px; }
+.rp-count { font-variant-numeric: tabular-nums; font-weight: 800; color: var(--muted); }
+.rp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.pl-hand { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; padding-top: 2px; }
+.pl-hand span { display: inline-flex; gap: 2px; align-items: center; }
