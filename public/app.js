@@ -22,6 +22,8 @@ const SCROLL_INFO = {
   vp: { ico: '🗿', desc: 'Worth 1 victory point. Keep it hidden — it counts automatically and is revealed at the end.' },
 };
 const BUILD_ICO = { road: '🛤️', village: '🏠', town: '🏰', scroll: '📜' };
+// the app mark: a hex island on the sea with a little settlement (same art as the favicon)
+const LOGO_SVG = '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,3 57,17.5 57,46.5 32,61 7,46.5 7,17.5" fill="#2f7f93" stroke="#f6ecd8" stroke-width="3"/><polygon points="32,13 48.5,22.5 48.5,41.5 32,51 15.5,41.5 15.5,22.5" fill="#e7b545"/><path d="M22 41h20V31l-10-8-10 8z" fill="#b8532a" stroke="#5b2a12" stroke-width="2" stroke-linejoin="round"/></svg>';
 const U = 56; // board units -> px
 
 const S = {
@@ -156,8 +158,12 @@ function renderHome(prefill = '') {
   $('#app').innerHTML = `
   <div class="home">
     <div class="hero">
-      <h1>Hexhaven</h1>
-      <p>Settle a hex island, trade with your friends, race to ${10} points. 2–8 players.</p>
+      ${heroIsland()}
+      <div class="hero-text">
+        <h1>Hexhaven</h1>
+        <p>Settle a hex island, trade with your friends, race to 10 points.</p>
+        <div class="hero-tags"><span>👥 2–8 players</span><span>✨ No sign-up</span><span>🌐 Play in the browser</span></div>
+      </div>
     </div>
     <div class="home-grid">
       <form class="card" id="f-create">
@@ -178,16 +184,16 @@ function renderHome(prefill = '') {
     ${recent.length ? `<div class="card rules"><h3>Your recent rooms</h3><div class="invite">${recent.map(([c, s]) => `<button class="btn small" data-recent="${esc(c)}">${esc(c)} · ${esc(s.name)}</button>`).join('')}</div></div>` : ''}
     <div class="card rules">
       <h3>How to play</h3>
-      <ul>
-        <li>Everyone rolls to decide who goes first, then places two settlements and two roads. Your second settlement pays out its neighboring tiles.</li>
-        <li>Each turn, roll two dice. Every tile showing that number pays its resource to adjacent settlements (1) and cities (2).</li>
-        <li>Spend resources to build, trade with other players or the bank (4:1, or better at a harbor), and buy development cards.</li>
-        <li>Rolling a 7 summons the bandit: anyone holding more than 7 cards discards half, then the roller blocks a tile and steals a card.</li>
-        <li>Settlement = 1 point, City = 2. The longest road (5+) is the <b>Grand Route</b> (+2), and 3+ Guards played earns the <b>Strongest Watch</b> (+2). First to 10 points on their own turn wins.</li>
-        <li>With 3+ players, a <b>builder phase</b> after each turn lets everyone else build too, so big games keep moving.</li>
+      <ul class="steps">
+        <li><span class="step-ico">🎲</span><span>Everyone rolls to decide who goes first, then places two settlements and two roads. Your second settlement pays out its neighboring tiles.</span></li>
+        <li><span class="step-ico">🌾</span><span>Each turn, roll two dice. Every tile showing that number pays its resource to adjacent settlements (1) and cities (2).</span></li>
+        <li><span class="step-ico">🤝</span><span>Spend resources to build, trade with other players or the bank (4:1, or better at a harbor ⚓), and buy development cards.</span></li>
+        <li><span class="step-ico">🥷</span><span>Rolling a 7 summons the bandit: anyone holding more than 7 cards discards half, then the roller blocks a tile and steals a card.</span></li>
+        <li><span class="step-ico">🏆</span><span>Settlement = 1 point, City = 2. The longest road (5+) is the <b>Grand Route</b> (+2), and 3+ Guards played earns the <b>Strongest Watch</b> (+2). First to 10 points on their own turn wins.</span></li>
+        <li><span class="step-ico">👥</span><span>With 3+ players, a <b>builder phase</b> after each turn lets everyone else build too, so big games keep moving.</span></li>
       </ul>
       <div class="costs">
-        <span>🛤️ Road: 🌲🧱</span><span>🏠 Settlement: 🌲🧱🐑🌾</span><span>🏰 City: 🌾🌾⛏️⛏️⛏️</span><span>📜 Development card: 🐑🌾⛏️</span>
+        <span><b>🛤️ Road</b> 🌲🧱</span><span><b>🏠 Settlement</b> 🌲🧱🐑🌾</span><span><b>🏰 City</b> 🌾🌾⛏️⛏️⛏️</span><span><b>📜 Development card</b> 🐑🌾⛏️</span>
       </div>
     </div>
     <p class="hint" style="text-align:center;margin-top:18px">${buildTag()}</p>
@@ -404,7 +410,7 @@ function renderLobby(v) {
     $('#app').innerHTML = `
     <div class="lobby">
       <div class="lobby-head">
-        <div><div class="hint">Room code</div><div class="room-code">${esc(v.code)}</div></div>
+        <div><div class="lobby-label">${LOGO_SVG}Room code</div><div class="room-code" aria-label="Room code ${esc(v.code)}">${[...v.code].map((ch) => `<span>${esc(ch)}</span>`).join('')}</div></div>
         <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button></div>
       </div>
       <div class="card"><div id="lobby-main"></div></div>
@@ -435,7 +441,7 @@ function renderLobby(v) {
   $('#lobby-main').innerHTML = `
     <h2>Players <span class="hint">(${n}/${v.maxPlayers})</span></h2>
     <ul class="plist">${v.players.map((p) => `
-      <li>${chip(p.color)}<b style="flex:1">${esc(p.name)}${p.id === v.me ? ' <span class="hint">(you)</span>' : ''}</b>
+      <li style="--pc:${PC[p.color]}">${chip(p.color)}<b style="flex:1">${esc(p.name)}${p.id === v.me ? ' <span class="hint">(you)</span>' : ''}</b>
         ${p.id === v.hostId ? '<span class="badge">host</span>' : ''}
         <span class="dot ${p.connected ? '' : 'off'}" title="${p.connected ? 'online' : 'offline'}"></span>
         ${host && p.id !== v.me ? `<button class="btn small" data-kick="${p.id}">Remove</button>` : ''}
@@ -634,7 +640,7 @@ function renderGame(v) {
     $('#app').innerHTML = `
     <div class="game">
       <header class="topbar">
-        <span class="brand">Hexhaven</span>
+        <span class="brand">${LOGO_SVG}Hexhaven</span>
         <span class="roomtag" id="roomtag" title="Copy invite link">Room ${esc(v.code)}</span>
         <div class="status" id="status"></div>
         <span class="conn" id="conn"></span>
@@ -643,7 +649,7 @@ function renderGame(v) {
         <button class="btn small" id="mute" title="Sound on/off"></button>
       </header>
       <div class="boardwrap" id="boardwrap">
-        <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="g-static"></g><g id="g-low"></g><g id="g-dyn"></g><g id="g-hint"></g></svg>
+        <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="g-static"></g><g id="g-low"></g><g id="g-dyn" filter="url(#piece-shadow)"></g><g id="g-hint"></g></svg>
         <div class="board-legend" id="legend"></div>
         <div class="fx" id="fx" aria-live="polite"></div>
         <div class="timerbar" id="timerbar" hidden aria-hidden="true"><div></div></div>
@@ -769,6 +775,66 @@ function dieSvg(n) {
 function hexPoints(v, h) { return h.v.map((id) => `${v.board.vertices[id].x * U},${v.board.vertices[id].y * U}`).join(' '); }
 const PIPS = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
 
+// mix two #rrggbb colors (t = 0 → a, 1 → b)
+function mixHex(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return '#' + x.map((c, i) => Math.round(c + (y[i] - c) * t).toString(16).padStart(2, '0')).join('');
+}
+
+// Board art, defined once: light-from-above shading per terrain, a faint texture per terrain
+// (trees, bricks, tufts, furrows, peaks, ripples), sand, token finish and soft shadows.
+const TERRAIN_TEXTURE = {
+  wood: [18, 16, '<path d="M5 3 9 10H1Z M14 9 18 16H10Z" fill="#1d4620" opacity=".38"/><path d="M5 10v2 M14 16v1" stroke="#3b2a14" stroke-width="1" opacity=".3"/>'],
+  clay: [16, 9, '<path d="M0 .5H16 M0 4.5H16 M4 .5V4.5 M12 4.5V8.5" stroke="#6e2c12" stroke-width=".9" opacity=".32"/>'],
+  fleece: [16, 14, '<path d="M3 6q1-3 2 0 M10 12q1-3 2 0" stroke="#4d7a25" stroke-width="1.1" fill="none" opacity=".45"/><circle cx="12" cy="4" r="1.3" fill="#fff" opacity=".45"/>'],
+  wheat: [10, 10, '<path d="M0 10 10 0 M-2 2 2 -2 M8 12 12 8" stroke="#8a6608" stroke-width="1.1" opacity=".3"/>'],
+  iron: [20, 16, '<path d="M2 14 8 6l6 8 M11 14l4-5 4 5" fill="none" stroke="#2c333c" stroke-width="1.3" opacity=".38"/><path d="M6.5 8 8 6l1.5 2" stroke="#fff" stroke-width="1.2" fill="none" opacity=".55"/>'],
+  desert: [20, 10, '<path d="M0 7q5-4 10 0t10 0" fill="none" stroke="#86703d" stroke-width="1" opacity=".42"/>'],
+};
+const BOARD_DEFS = [
+  '<filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1.2" stdDeviation="1.1" flood-color="#000" flood-opacity=".38"/></filter>',
+  '<filter id="island-shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10"/><feOffset dy="8"/></filter>',
+  '<filter id="piece-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.2" flood-color="#000" flood-opacity=".45"/></filter>',
+  '<radialGradient id="token" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#ecdcb8"/></radialGradient>',
+  '<radialGradient id="sand" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#f3e2b4"/><stop offset="1" stop-color="#dcc188"/></radialGradient>',
+  ...Object.keys(RM).map((r) => `<linearGradient id="g-${r}" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="${mixHex(RM[r].color, '#ffffff', 0.2)}"/><stop offset=".55" stop-color="${RM[r].color}"/><stop offset="1" stop-color="${mixHex(RM[r].color, RM[r].deep, 0.35)}"/></linearGradient>`),
+  ...Object.entries(TERRAIN_TEXTURE).map(([r, [w, h, d]]) => `<pattern id="p-${r}" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${d}</pattern>`),
+].join('');
+
+// A little seven-tile island for the home page, drawn with the same art as the board.
+function heroIsland() {
+  const S = 36, SQ3 = Math.sqrt(3);
+  const tiles = [[0, 0, 'wheat', 8], [1, 0, 'wood', 6], [1, -1, 'iron', 5], [0, -1, 'fleece', 10], [-1, 0, 'clay', 9], [-1, 1, 'wood', 4], [0, 1, 'desert', null]];
+  const corners = (cx, cy, k) => [0, 1, 2, 3, 4, 5].map((i) => {
+    const a = (Math.PI / 180) * (60 * i - 90);
+    return [cx + S * k * Math.cos(a), cy + S * k * Math.sin(a)];
+  });
+  const pts = (arr) => arr.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const at = tiles.map(([q, r, res, num]) => ({ x: S * SQ3 * (q + r / 2), y: S * 1.5 * r, res, num }));
+  let g = `<g filter="url(#island-shadow)">${at.map((t) => `<polygon points="${pts(corners(t.x, t.y, 1.22))}" fill="#0b2f40" opacity=".5"/>`).join('')}</g>`;
+  g += at.map((t) => `<polygon points="${pts(corners(t.x, t.y, 1.45))}" fill="#7cc4c9" opacity=".22"/>`).join('');
+  g += at.map((t) => `<polygon points="${pts(corners(t.x, t.y, 1.18))}" fill="url(#sand)" stroke="#e2c58c" stroke-width="2"/>`).join('');
+  for (const t of at) {
+    const p = pts(corners(t.x, t.y, 1));
+    g += `<polygon points="${p}" fill="url(#g-${t.res})" stroke="#f1dfb0" stroke-width="3" stroke-linejoin="round"/><polygon points="${p}" fill="url(#p-${t.res})"/>`;
+    g += `<circle cx="${t.x}" cy="${t.y - (t.num ? 9 : 0)}" r="11" fill="#fffaf0" stroke="${RM[t.res].deep}" stroke-width="2" filter="url(#plate-shadow)"/>`;
+    g += `<text x="${t.x}" y="${t.y - (t.num ? 9 : 0) + 1}" font-size="13" text-anchor="middle" dominant-baseline="central">${RM[t.res].ico}</text>`;
+    if (t.num) {
+      const red = t.num === 6 || t.num === 8;
+      g += `<circle cx="${t.x}" cy="${t.y + 14}" r="10" fill="url(#token)" stroke="#9c825a" stroke-width="1.2" filter="url(#plate-shadow)"/>`;
+      g += `<text x="${t.x}" y="${t.y + 14.5}" font-size="11" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${red ? '#c0281c' : '#2b2118'}" class="tok-num">${t.num}</text>`;
+    }
+  }
+  // a road and a settlement where wheat, wood and iron meet
+  const [w0] = [corners(at[0].x, at[0].y, 1)];
+  const v = w0[1]; const v2 = w0[0];
+  g += `<g filter="url(#piece-shadow)"><line x1="${v[0]}" y1="${v[1]}" x2="${(v[0] + v2[0]) / 2 + 2}" y2="${(v[1] + v2[1]) / 2 + 1}" stroke="#1d150e" stroke-width="8" stroke-linecap="round"/>`
+    + `<line x1="${v[0]}" y1="${v[1]}" x2="${(v[0] + v2[0]) / 2 + 2}" y2="${(v[1] + v2[1]) / 2 + 1}" stroke="${PC.red}" stroke-width="5" stroke-linecap="round"/>`
+    + villageShape(v[0], v[1], PC.red) + '</g>';
+  return `<svg class="hero-art" viewBox="-140 -118 280 236" aria-hidden="true"><defs>${BOARD_DEFS}</defs>${g}</svg>`;
+}
+
 function renderBoardStatic(v) {
   const b = v.board;
   const key = v.code + ':' + b.hexes.map((h) => h.res + h.num).join(',');
@@ -782,29 +848,48 @@ function renderBoardStatic(v) {
   S.vb0 = [minX, minY, w, h]; S.vb = S.vb0.slice();
   // start a little zoomed in so tiles are big and the map can be dragged right away; ⤢ shows the whole island
   zoomBy(b.radius >= 3 ? 1.45 : 1.25);
-  let out = '<defs><filter id="plate-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".35"/></filter></defs>';
-  // harbors (behind tiles so docks tuck under the coast)
+  // hex corners pushed out (k > 1) or pulled in (k < 1) around the tile's center
+  const ring = (hx, k) => hx.v.map((id) => {
+    const p = b.vertices[id];
+    return `${(hx.x + (p.x - hx.x) * k) * U},${(hx.y + (p.y - hx.y) * k) * U}`;
+  }).join(' ');
+  let out = `<defs>${BOARD_DEFS}</defs>`;
+
+  // the island: a soft shadow, a ring of shallow water, then the beach — each tile's hex grown a little
+  out += `<g filter="url(#island-shadow)">${b.hexes.map((hx) => `<polygon points="${ring(hx, 1.2)}" fill="#0b2f40" opacity=".55"/>`).join('')}</g>`;
+  out += `<g>${b.hexes.map((hx) => `<polygon points="${ring(hx, 1.42)}" fill="#7cc4c9" opacity=".22"/>`).join('')}</g>`;
+  out += `<g>${b.hexes.map((hx) => `<polygon points="${ring(hx, 1.17)}" fill="url(#sand)" stroke="#e2c58c" stroke-width="2" stroke-linejoin="round"/>`).join('')}</g>`;
+
+  // harbor docks: wooden planks from the badge to the two coast corners
   for (const hb of b.harbors) {
     const E = b.edges[hb.edge]; const A = b.vertices[E.a]; const B = b.vertices[E.b];
-    out += `<line x1="${hb.x * U}" y1="${hb.y * U}" x2="${A.x * U}" y2="${A.y * U}" stroke="#8b5a2b" stroke-width="5" stroke-linecap="round"/>`;
-    out += `<line x1="${hb.x * U}" y1="${hb.y * U}" x2="${B.x * U}" y2="${B.y * U}" stroke="#8b5a2b" stroke-width="5" stroke-linecap="round"/>`;
+    for (const P of [A, B]) {
+      const c = `x1="${hb.x * U}" y1="${hb.y * U}" x2="${P.x * U}" y2="${P.y * U}"`;
+      out += `<line ${c} stroke="#5b3a1c" stroke-width="7" stroke-linecap="round"/><line ${c} stroke="#a8743f" stroke-width="4" stroke-linecap="round" stroke-dasharray="5 2"/>`;
+    }
   }
+
   for (const hx of b.hexes) {
-    out += `<polygon points="${hexPoints(v, hx)}" fill="${RM[hx.res].color}" stroke="#efdcae" stroke-width="4" stroke-linejoin="round"/>`;
+    const pts = hexPoints(v, hx);
+    // base color with a little light from the top, the terrain texture, then a thin inner highlight
+    out += `<polygon points="${pts}" fill="url(#g-${hx.res})" stroke="#f1dfb0" stroke-width="3.5" stroke-linejoin="round"/>`;
+    out += `<polygon points="${pts}" fill="url(#p-${hx.res})" pointer-events="none"/>`;
+    out += `<polygon points="${ring(hx, 0.9)}" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="1.5" stroke-linejoin="round" pointer-events="none"/>`;
     const cx = hx.x * U, cy = hx.y * U;
     out += `<circle cx="${cx}" cy="${cy - 24}" r="14" fill="#fffaf0" stroke="${RM[hx.res].deep}" stroke-width="2.5" filter="url(#plate-shadow)"/>`;
     out += `<text x="${cx}" y="${cy - 23}" font-size="17" text-anchor="middle" dominant-baseline="central">${RM[hx.res].ico}</text>`;
     if (hx.num) {
       const red = hx.num === 6 || hx.num === 8;
-      out += `<circle cx="${cx}" cy="${cy + 9}" r="17" fill="#f8efd8" stroke="#8a7350" stroke-width="1.5"/>`;
-      out += `<text x="${cx}" y="${cy + 6}" font-size="${red ? 17 : 15}" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${red ? '#c0281c' : '#2b2118'}" font-family="Georgia,serif">${hx.num}</text>`;
+      out += `<circle cx="${cx}" cy="${cy + 9}" r="17.5" fill="url(#token)" stroke="#9c825a" stroke-width="1.5" filter="url(#plate-shadow)"/>`;
+      out += `<circle cx="${cx}" cy="${cy + 9}" r="14.5" fill="none" stroke="#c9b48e" stroke-width=".8"/>`;
+      out += `<text x="${cx}" y="${cy + 6}" font-size="${red ? 18 : 16}" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${red ? '#c0281c' : '#2b2118'}" class="tok-num">${hx.num}</text>`;
       const n = PIPS[hx.num];
       for (let i = 0; i < n; i++) out += `<circle cx="${cx + (i - (n - 1) / 2) * 4}" cy="${cy + 19}" r="1.5" fill="${red ? '#c0281c' : '#2b2118'}"/>`;
     }
   }
   for (const hb of b.harbors) {
     const label = hb.type === 'any' ? '3:1' : '2:1';
-    out += `<circle cx="${hb.x * U}" cy="${hb.y * U}" r="16" fill="#fffaf0" stroke="#8b5a2b" stroke-width="2"/>`;
+    out += `<circle cx="${hb.x * U}" cy="${hb.y * U}" r="17" fill="url(#token)" stroke="#5b3a1c" stroke-width="2.5" filter="url(#plate-shadow)"/>`;
     if (hb.type === 'any') out += `<text x="${hb.x * U}" y="${hb.y * U}" font-size="12" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="#2b2118">${label}</text>`;
     else {
       out += `<text x="${hb.x * U}" y="${hb.y * U - 5}" font-size="12" text-anchor="middle" dominant-baseline="central">${RM[hb.type].ico}</text>`;
@@ -1026,7 +1111,7 @@ function renderDock(v) {
       <div class="dc-foot">${foot}</div></div>`;
   }).join('');
   $('#dock').innerHTML = `
-    <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
+    <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background-color:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
     ${scrolls ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
@@ -1069,7 +1154,7 @@ function renderPlayers(v) {
     const waiting = v.status === 'playing' && stalled.includes(p.id);
     const canSkip = waiting && p.id !== v.me && (host || !p.connected);
     const vpTxt = p.vpTotal !== null && p.vpTotal !== p.vp ? `${p.vpTotal}<span class="hint" title="includes hidden Monuments"> (${p.vp} shown)</span>` : p.vp;
-    return `<div class="pl ${turnOf ? 'cur' : ''} ${p.connected ? '' : 'off'}">
+    return `<div class="pl ${turnOf ? 'cur' : ''} ${p.connected ? '' : 'off'}" style="--pc:${PC[p.color]}">
       <div class="pl-top">${chip(p.color)}<span class="pl-name">${esc(p.name)}${p.id === v.me ? ' <span class="hint">(you)</span>' : ''}</span>
         ${p.id === v.hostId ? '<span class="badge">host</span>' : ''}
         ${p.connected ? '' : '<span class="badge">offline</span>'}
@@ -1225,7 +1310,7 @@ function closeModal() { S.modal = null; $('#modal-root').innerHTML = ''; }
 // limits: most you can pick of each resource (your hand) · cap: most you can pick in total (e.g. cards owed in a discard)
 function stepperGrid(prefix, counts, limits, cap) {
   const full = cap !== undefined && cnt(counts) >= cap;
-  return `<div class="steppers">${RES.map((r) => `<div class="stepper">
+  return `<div class="steppers">${RES.map((r) => `<div class="stepper ${counts[r] ? 'set' : ''}">
     <div class="ico">${RM[r].ico}</div><div class="n">${counts[r]}</div>
     ${limits ? `<div class="have">of ${limits[r]}</div>` : ''}
     <div class="ctl"><button class="btn small" data-step="${prefix}:${r}:-1" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
@@ -1244,7 +1329,7 @@ function bankGrid(v, side) {
     const canAdd = side === 'bgive' ? counts[r] + step <= hand[r] && !other
       : cnt(u.bget) < lots && counts[r] < v.bank[r] && !other;
     const sub = side === 'bgive' ? `${v.rates[r]}:1 · have ${hand[r]}` : `bank ${v.bank[r]}`;
-    return `<div class="stepper ${other ? 'locked' : ''}">
+    return `<div class="stepper ${other ? 'locked' : ''} ${counts[r] ? 'set' : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${counts[r]}</div><div class="have">${sub}</div>
       <div class="ctl"><button class="btn small" data-step="${side}:${r}:-${step}" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
       <button class="btn small" data-step="${side}:${r}:${step}" ${canAdd ? '' : 'disabled'} aria-label="more ${RM[r].name}">+${step > 1 ? step : ''}</button></div></div>`;
