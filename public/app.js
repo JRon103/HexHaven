@@ -233,6 +233,23 @@ function render() {
 
 // ---------- "what just happened" feedback: chime, card gains, fresh pieces ----------
 function soundOn() { try { return localStorage.getItem('hexhaven:mute') !== '1'; } catch { return true; } }
+
+// Animations follow the system's "reduce motion" setting until the player flips the ✨ button in the
+// top bar, which stores an explicit on/off for this device. CSS reads the result as html.reduce-motion.
+const REDUCE_MQ = matchMedia('(prefers-reduced-motion: reduce)');
+function motionPref() { try { return localStorage.getItem('hexhaven:motion') || 'auto'; } catch { return 'auto'; } }
+function motionOn() { const p = motionPref(); return p === 'on' || (p === 'auto' && !REDUCE_MQ.matches); }
+function applyMotion() {
+  document.documentElement.classList.toggle('reduce-motion', !motionOn());
+  const b = $('#motion');
+  if (!b) return;
+  const on = motionOn();
+  b.classList.toggle('off', !on);
+  b.title = `Animations ${on ? 'on' : 'off'}${motionPref() === 'auto' ? ' (following your system setting)' : ''} — click to turn ${on ? 'off' : 'on'}`;
+  b.setAttribute('aria-pressed', String(on));
+}
+if (REDUCE_MQ.addEventListener) REDUCE_MQ.addEventListener('change', applyMotion);
+applyMotion();
 function chime(kind) {
   if (!soundOn()) return;
   try {
@@ -314,7 +331,7 @@ function showDice(v, roll) {
     if (seven) { el.classList.add('seven'); banditAlert(); chime('seven'); }
   };
   const dice = [...el.querySelectorAll('.die3d')];
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduce = !motionOn();
   dice.forEach((d, i) => {
     const [tx, ty] = FACE_TURN[roll.d[i]];
     const cube = d.querySelector('.cube');
@@ -646,6 +663,7 @@ function renderGame(v) {
         <span class="conn" id="conn"></span>
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
         <div class="dice" id="dice"></div>
+        <button class="btn small" id="motion" aria-label="Animations">✨</button>
         <button class="btn small" id="mute" title="Sound on/off"></button>
       </header>
       <div class="boardwrap" id="boardwrap">
@@ -685,6 +703,12 @@ function renderGame(v) {
       muteLabel(); if (soundOn()) chime('turn');
     };
     muteLabel();
+    $('#motion').onclick = () => {
+      try { localStorage.setItem('hexhaven:motion', motionOn() ? 'off' : 'on'); } catch {}
+      applyMotion();
+      toast(motionOn() ? '✨ Animations on' : 'Animations off');
+    };
+    applyMotion();
     bindChat();
   }
   if (!isBuilding(v)) S.mode = null;
