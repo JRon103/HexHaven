@@ -234,21 +234,18 @@ function render() {
 // ---------- "what just happened" feedback: chime, card gains, fresh pieces ----------
 function soundOn() { try { return localStorage.getItem('hexhaven:mute') !== '1'; } catch { return true; } }
 
-// Animations follow the system's "reduce motion" setting until the player flips the ✨ button in the
-// top bar, which stores an explicit on/off for this device. CSS reads the result as html.reduce-motion.
-const REDUCE_MQ = matchMedia('(prefers-reduced-motion: reduce)');
-function motionPref() { try { return localStorage.getItem('hexhaven:motion') || 'auto'; } catch { return 'auto'; } }
-function motionOn() { const p = motionPref(); return p === 'on' || (p === 'auto' && !REDUCE_MQ.matches); }
+// Animations are on by default; the ✨ button in the top bar turns them off (or back on) and the choice is
+// stored per device. CSS reads the result as html.reduce-motion.
+function motionOn() { try { return localStorage.getItem('hexhaven:motion') !== 'off'; } catch { return true; } }
 function applyMotion() {
   document.documentElement.classList.toggle('reduce-motion', !motionOn());
   const b = $('#motion');
   if (!b) return;
   const on = motionOn();
   b.classList.toggle('off', !on);
-  b.title = `Animations ${on ? 'on' : 'off'}${motionPref() === 'auto' ? ' (following your system setting)' : ''} — click to turn ${on ? 'off' : 'on'}`;
+  b.title = `Animations ${on ? 'on' : 'off'} — click to turn ${on ? 'off' : 'on'}`;
   b.setAttribute('aria-pressed', String(on));
 }
-if (REDUCE_MQ.addEventListener) REDUCE_MQ.addEventListener('change', applyMotion);
 applyMotion();
 function chime(kind) {
   if (!soundOn()) return;

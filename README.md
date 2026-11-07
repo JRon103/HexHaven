@@ -77,7 +77,7 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Build costs light up:** each cost icon glows when you hold that card and greys out when you are missing it.
 - **Rolling a 7:** the dice turn red, the board flashes, and a red banner stays up until discards, the bandit move and the steal are done. When discarding you can only pick exactly the number of cards you owe.
 - **Robbing:** after moving the bandit you pick one of the victim's face-down cards. It flips over to show what you took, and only you and the victim see what it was.
-- Every roll shows two 3D dice thrown onto the board. Animations follow your device's "reduce motion" setting; the ✨ button in the top bar turns them on or off for that device. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
+- Every roll shows two 3D dice thrown onto the board. Animations are on by default; the ✨ button in the top bar turns them off (or back on) for that device. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
 - **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card · `Esc` cancel.
 
 ## Files
