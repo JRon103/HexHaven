@@ -1463,7 +1463,14 @@ function renderModal(v) {
         <button class="btn" data-do="hide">View board</button></div>`;
     if (S.hideOver) { root.innerHTML = ''; return; }
   }
-  root.innerHTML = `<div class="backdrop" data-backdrop><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  // Same dialog still open (e.g. clicking + while discarding): swap only its contents so the window
+  // doesn't replay its entrance animation (or lose its scroll position) on every click.
+  const open = root.querySelector('.modal');
+  if (open && root.dataset.kind === kind) open.innerHTML = html;
+  else {
+    root.innerHTML = `<div class="backdrop" data-backdrop><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+    root.dataset.kind = kind;
+  }
 
   root.querySelectorAll('[data-step]').forEach((b) => {
     b.onclick = () => {
