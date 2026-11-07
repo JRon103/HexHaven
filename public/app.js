@@ -1059,8 +1059,13 @@ function svgPoint(cx, cy) {
 function zoomBy(factor, at) {
   if (!S.vb) return;
   const [x, y, w, h] = S.vb;
+  // Limit the zoom first (between the whole island and 4× in), then place the view. Placing it with the
+  // unlimited factor and clamping afterwards made each extra click at the limit slide the map to a corner.
+  const w0 = S.vb0[2];
+  const f = w / Math.min(w0, Math.max(w0 / 4, w / factor));
+  if (Math.abs(f - 1) < 1e-6) return; // already at the limit: nothing moves
   const c = at || { x: x + w / 2, y: y + h / 2 };
-  S.vb = [c.x - (c.x - x) / factor, c.y - (c.y - y) / factor, w / factor, h / factor];
+  S.vb = [c.x - (c.x - x) / f, c.y - (c.y - y) / f, w / f, h / f];
   clampVB(); applyVB();
 }
 function bindZoom() {
@@ -1350,7 +1355,11 @@ function openModal(kind) {
   }
   renderModal(S.v);
 }
-function closeModal() { S.modal = null; $('#modal-root').innerHTML = ''; }
+function closeModal() {
+  S.modal = null; $('#modal-root').innerHTML = '';
+  // after the game, closing e.g. the dice stats goes back to the winner window (no server update will redraw it)
+  if (S.v && S.v.status === 'over' && S.screen === 'game' && !S.replay) renderModal(S.v);
+}
 
 // limits: most you can pick of each resource (your hand) · cap: most you can pick in total (e.g. cards owed in a discard)
 function stepperGrid(prefix, counts, limits, cap) {
@@ -1386,7 +1395,8 @@ function renderModal(v) {
   const t = v.turn; const hand = v.hand || zero();
   // forced modals take priority
   let kind = S.modal;
-  if (v.status === 'over' && !S.replay) kind = 'over';
+  // after the game, the winner window shows unless the player opened something to look at (dice stats, card reference)
+  if (v.status === 'over' && !S.replay && !['dice', 'cardref'].includes(S.modal)) kind = 'over';
   else if (t.phase === 'discard' && v.pendingDiscard[v.me]) { if (S.modal !== 'discard') { S.modal = 'discard'; S.ui = { cards: zero() }; } kind = 'discard'; }
   else if (t.phase === 'steal' && isMine(v)) kind = 'steal';
   else if (kind === 'discard') kind = null;
@@ -1478,6 +1488,7 @@ function renderModal(v) {
         <span class="pl-vp">${p.vpTotal}</span></div>`).join('')}</div>
       <div class="foot" style="justify-content:flex-start">
         <button class="btn" data-do="replay">▶ Watch replay</button>
+        <button class="btn" data-do="dicestats">🎲 Dice stats</button>
         <button class="btn" data-do="download">💾 Download game</button></div>
       <div class="foot">${v.hostId === v.me ? '<button class="btn primary" data-do="rematch">Back to lobby for a rematch</button>' : '<span class="hint">The host can start a rematch.</span>'}
         <button class="btn" data-do="hide">View board</button></div>`;
@@ -1527,6 +1538,7 @@ function renderModal(v) {
       if (d === 'bank') { if (await send({ type: 'bankTrade', give: S.ui.bgive, get: S.ui.bget })) { S.ui.bgive = zero(); S.ui.bget = zero(); toast('Traded with the bank'); renderModal(S.v); } }
       if (d === 'replay') { closeModal(); replayThisGame(); return; }
       if (d === 'download') { downloadSave(); return; }
+      if (d === 'dicestats') { openModal('dice'); return; }
       if (d === 'rematch') { closeModal(); send({ type: 'rematch' }); }
     };
   });
