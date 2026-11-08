@@ -123,7 +123,8 @@ const bad = [
   ['duplicate color', (f) => { f.players[1].color = f.players[0].color; }, /Two players use the color/],
   ['unknown position', (f) => { f.pieces[1] = { settlements: ['9.9N'], cities: [], roads: [] }; }, /Unknown corner/],
   ['wrong row length', (f) => { f.map.tiles[0] += ' Wo3'; }, /needs 3 tiles/],
-  ['bad number', (f) => { f.map.tiles[0] = f.map.tiles[0].replace(/^(Wo|Cl|Fl|Wh|Ir)\d+/, 'Wh7'); }, /needs a number/],
+  // a 7 on the first numbered tile of row 1 (its first tile may be the dunes, which have no number)
+  ['bad number', (f) => { f.map.tiles[0] = f.map.tiles[0].replace(/(Wo|Cl|Fl|Wh|Ir)\d+/, 'Wh7'); }, /needs a number/],
   ['not a save', (f) => { f.hexhaven = 99; }, /not a Hexhaven save/],
 ];
 for (const [what, edit, msg] of bad) {
