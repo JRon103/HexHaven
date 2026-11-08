@@ -93,10 +93,12 @@ const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/crowns-ui.js': ['crowns-ui.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   // the rules, notation and save code, so the browser's replay viewer runs the real engine
   '/lib/notation.js': ['../notation.js', 'text/javascript; charset=utf-8'],
+  '/lib/crowns.js': ['../crowns.js', 'text/javascript; charset=utf-8'],
   '/lib/game.js': ['../game.js', 'text/javascript; charset=utf-8'],
   '/lib/save.js': ['../save.js', 'text/javascript; charset=utf-8'],
 };
@@ -124,7 +126,7 @@ const server = http.createServer(async (req, res) => {
         // stamp the build onto the script/style URLs so no browser keeps a cached copy from an older deploy
         const v = encodeURIComponent(BUILD.commit);
         const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8')
-          .replace('href="/style.css"', `href="/style.css?v=${v}"`).replace('src="/app.js"', `src="/app.js?v=${v}"`);
+          .replace('href="/style.css"', `href="/style.css?v=${v}"`).replace('src="/app.js"', `src="/app.js?v=${v}"`).replace('src="/crowns-ui.js"', `src="/crowns-ui.js?v=${v}"`);
         return res.end(html);
       }
       return fs.createReadStream(path.join(PUBLIC, file)).pipe(res);

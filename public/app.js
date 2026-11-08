@@ -9,7 +9,13 @@ const RM = {
   wheat:  { name: 'Wheat',  ico: '🌾', color: '#e2bc45', card: '#f4e0a0', deep: '#94700f' },
   iron:   { name: 'Iron',   ico: '⛏️', color: '#8b939f', card: '#cfd4db', deep: '#4b535e' },
   desert: { name: 'Dunes',  ico: '🏜️', color: '#dcc697', deep: '#97804d' },
+  parchment: { name: 'Parchment', ico: '📃', card: '#e9dcc0', deep: '#2f7a46' },
+  linen:     { name: 'Linen',     ico: '🧵', card: '#f1e3a6', deep: '#9a7a12' },
+  silver:    { name: 'Silver',    ico: '🪙', card: '#d6dcea', deep: '#34558f' },
 };
+const COMS = ['parchment', 'linen', 'silver'];
+const ALLC = [...RES, ...COMS];
+const handKinds = (v) => (v && v.crowns ? ALLC : RES); // the cards this game uses
 const PC = {
   red: '#d6453d', blue: '#2f6bd6', ivory: '#f3ecd9', orange: '#ec8a1c',
   green: '#2c9a55', brown: '#8b5a2b', purple: '#8e4ec6', teal: '#17a8a8',
@@ -21,7 +27,7 @@ const SCROLL_INFO = {
   monopoly: { ico: '⚖️', desc: 'Name a resource. Every other player must give you all of their cards of that resource.' },
   vp: { ico: '🗿', desc: 'Worth 1 victory point. Keep it hidden — it counts automatically and is revealed at the end.' },
 };
-const BUILD_ICO = { road: '🛤️', village: '🏠', town: '🏰', scroll: '📜' };
+const BUILD_ICO = { road: '🛤️', village: '🏠', town: '🏰', scroll: '📜', wall: '🧱', warden: '🛡️' };
 // the app mark: a hex island on the sea with a little settlement (same art as the favicon)
 const LOGO_SVG = '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,3 57,17.5 57,46.5 32,61 7,46.5 7,17.5" fill="#2f7f93" stroke="#f6ecd8" stroke-width="3"/><polygon points="32,13 48.5,22.5 48.5,41.5 32,51 15.5,41.5 15.5,22.5" fill="#e7b545"/><path d="M22 41h20V31l-10-8-10 8z" fill="#b8532a" stroke="#5b2a12" stroke-width="2" stroke-linejoin="round"/></svg>';
 const U = 56; // board units -> px
@@ -33,15 +39,15 @@ const S = {
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const cnt = (h) => RES.reduce((s, r) => s + (h[r] || 0), 0);
-const has = (h, c) => RES.every((r) => (h[r] || 0) >= (c[r] || 0));
-const zero = () => ({ wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0 });
+const cnt = (h) => ALLC.reduce((s, r) => s + (h[r] || 0), 0);
+const has = (h, c) => ALLC.every((r) => (h[r] || 0) >= (c[r] || 0));
+const zero = () => Object.fromEntries(ALLC.map((r) => [r, 0]));
 // One icon per card a build needs; each lights up if you hold it (the 2nd iron lights only with 2 iron, etc.)
-const costHtml = (c, hand) => RES.filter((r) => c[r]).map((r) => Array.from({ length: c[r] }, (_, i) => {
+const costHtml = (c, hand) => ALLC.filter((r) => c[r]).map((r) => Array.from({ length: c[r] }, (_, i) => {
   const ok = (hand[r] || 0) > i;
   return `<span class="c ${ok ? 'have' : 'miss'}" title="${RM[r].name}${ok ? '' : ' — missing'}">${RM[r].ico}</span>`;
 }).join('')).join('');
-const resList = (c) => RES.filter((r) => c[r]).map((r) => `${c[r]} ${RM[r].ico} ${RM[r].name}`).join(', ');
+const resList = (c) => ALLC.filter((r) => c[r]).map((r) => `${c[r]} ${RM[r].ico} ${RM[r].name}`).join(', ');
 
 function toast(msg, err) {
   const el = document.createElement('div');
@@ -279,7 +285,8 @@ function noticeChanges(v) {
     needMe: v.status === 'playing' && (v.stalled || []).includes(v.me),
     trade: v.trade && v.trade.from !== v.me ? v.trade.id : null,
     hand: v.hand ? { ...v.hand } : null,
-    pieces: new Set([...Object.keys(v.buildings).map((k) => 'b' + k + v.buildings[k].type), ...Object.keys(v.roads).map((k) => 'r' + k)]),
+    pieces: new Set([...Object.keys(v.buildings).map((k) => 'b' + k + v.buildings[k].type), ...Object.keys(v.roads).map((k) => 'r' + k),
+      ...(v.crowns ? Object.keys(v.crowns.wardens).map((k) => 'w' + k) : [])]),
     roll: v.lastRoll ? v.lastRoll.id : 0,
     steal: v.lastSteal ? v.lastSteal.id : 0,
     bandit: v.bandit,
@@ -301,7 +308,7 @@ function noticeChanges(v) {
   if (stole) showSteal(v, v.lastSteal);
   if (cur.bandit !== prev.bandit && prev.bandit !== undefined) S.banditMove = { from: prev.bandit, at: now };
   if (cur.hand && prev.hand && !stole) {
-    const gained = RES.filter((r) => cur.hand[r] > prev.hand[r]).map((r) => RM[r].ico.repeat(cur.hand[r] - prev.hand[r])).join(' ');
+    const gained = ALLC.filter((r) => cur.hand[r] > prev.hand[r]).map((r) => RM[r].ico.repeat(cur.hand[r] - prev.hand[r])).join(' ');
     if (gained) setTimeout(() => toast(`+ ${gained}`), cur.roll !== prev.roll ? 900 : 0); // after the dice land
   }
   // private news (e.g. which scroll you drew), except steals, which get their own reveal
@@ -329,9 +336,12 @@ function showDice(v, roll) {
   const el = document.createElement('div');
   el.className = 'dicefx';
   el.style.setProperty('--c', pcolor(v, roll.by));
-  el.innerHTML = `<div class="dicefx-dice">${roll.d.map(() => `<div class="die3d"><div class="dshadow"></div><div class="cube">${
-    CUBE_FACES.map(([f, n]) => `<div class="face ${f}">${pipsSvg(n)}</div>`).join('')}</div></div>`).join('')}</div>
-    <div class="fx-label">${label}</div>`;
+  const red = (i) => !!v.crowns && roll.kind !== 'order' && i === 1;
+  const faces = roll.d.slice();
+  if (v.crowns && roll.event) faces.push(crEventFace(roll));
+  el.innerHTML = `<div class="dicefx-dice">${faces.map((_, i) => `<div class="die3d${red(i) ? ' red' : ''}${i === 2 ? ' event' : ''}"><div class="dshadow"></div><div class="cube">${
+    CUBE_FACES.map(([f, n]) => `<div class="face ${f}">${i === 2 ? crEventFaceHtml(n) : pipsSvg(n, red(i) ? '#fff' : undefined)}</div>`).join('')}</div></div>`).join('')}</div>
+    <div class="fx-label">${label}${v.crowns && roll.event ? crEventLabel(roll.event) : ''}</div>`;
   fx.appendChild(el);
 
   const land = () => {
@@ -341,7 +351,7 @@ function showDice(v, roll) {
   const dice = [...el.querySelectorAll('.die3d')];
   const reduce = !motionOn();
   dice.forEach((d, i) => {
-    const [tx, ty] = FACE_TURN[roll.d[i]];
+    const [tx, ty] = FACE_TURN[faces[i]];
     const cube = d.querySelector('.cube');
     const end = `rotateX(${tx}deg) rotateY(${ty}deg)`;
     if (reduce || !cube.animate) { cube.style.transform = end; return; }
@@ -479,6 +489,14 @@ function renderLobby(v) {
     }).join('')}</div>
     <h3 style="margin-top:18px">Game settings ${host ? '' : '<span class="hint">change any of these to suggest it to the host</span>'}</h3>
     <div class="settings">
+      <label class="field mode-field${chg('mode')}">Game mode
+        <select id="s-mode">
+          <option value="classic" ${val('mode') !== 'crowns' ? 'selected' : ''}>Classic — settle, trade and build to 10 points</option>
+          <option value="crowns" ${val('mode') === 'crowns' ? 'selected' : ''}>👑 Crowns & Raiders — cities, wardens and raids, to 13 points</option>
+        </select>
+        <span class="hint" style="font-weight:400">${val('mode') === 'crowns'
+          ? 'Cities also make commodities (📃 parchment, 🧵 linen, 🪙 silver) that buy city improvements. Raise wardens to fight off the raiders\' ship, or lose a city. A third die opens the Guild, Council and Academy gates and deals edicts. No development cards. Your second setup piece is a city. 2–8 players.'
+          : 'The standard game: roads, settlements, cities and development cards. 2–8 players.'}</span></label>
       <label class="field${chg('vpTarget')}">Points to win
         <input type="number" min="5" max="20" id="s-vp" value="${val('vpTarget')}"></label>
       <label class="field${chg('boardSize')}">Island size
@@ -520,6 +538,7 @@ function renderLobby(v) {
       Object.assign(S.draft, patch);
       renderLobby(S.v);
     };
+    $('#s-mode').onchange = (e) => upd({ mode: e.target.value, vpTarget: e.target.value === 'crowns' ? 13 : 10 });
     $('#s-vp').onchange = (e) => upd({ vpTarget: Math.max(5, Math.min(20, Math.round(Number(e.target.value)) || 10)) });
     $('#s-discard').onchange = (e) => upd({ discardLimit: Math.max(5, Math.min(12, Math.round(Number(e.target.value)) || 7)) });
     $('#s-size').onchange = (e) => upd({ boardSize: e.target.value });
@@ -545,6 +564,7 @@ function renderLobby(v) {
 
 // ---------- settings suggestions ----------
 const SETTING_TEXT = {
+  mode: ['Mode', (x) => (x === 'crowns' ? 'Crowns & Raiders' : 'Classic')],
   vpTarget: ['Points to win', (x) => x],
   boardSize: ['Island', (x) => x],
   discardLimit: ['Hand limit', (x) => x],
@@ -632,7 +652,7 @@ function renderLog(v) {
 // "who got what": a row per player — their color, their name, then one icon per card
 function harvestLine(v, d) {
   const rows = Object.entries(d.gains).map(([pid, c]) => {
-    const icons = RES.filter((r) => c[r] > 0).map((r) => `<span class="gain" title="${c[r]} ${RM[r].name}">${c[r] <= 3 ? RM[r].ico.repeat(c[r]) : `${RM[r].ico}×${c[r]}`}</span>`).join('');
+    const icons = ALLC.filter((r) => c[r] > 0).map((r) => `<span class="gain" title="${c[r]} ${RM[r].name}">${c[r] <= 3 ? RM[r].ico.repeat(c[r]) : `${RM[r].ico}×${c[r]}`}</span>`).join('');
     return `<span class="hv">${whoTag(v, pid)}${icons || '<span class="hint">nothing</span>'}</span>`;
   });
   return `<div class="e harvest">${d.setup ? '' : '<span class="hv-tag">🎲 Harvest</span>'}${rows.join('')}</div>`;
@@ -648,12 +668,12 @@ const whoTag = (v, pid) => {
 function decorateLog(v, html) {
   const players = v.players.map((p) => ({ p, n: esc(p.name) })).sort((a, b) => b.n.length - a.n.length);
   const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const words = [...players.map((x) => reEsc(x.n)), 'Wood', 'Clay', 'Fleece', 'Wheat', 'Iron'];
+  const words = [...players.map((x) => reEsc(x.n)), 'Wood', 'Clay', 'Fleece', 'Wheat', 'Iron', 'Parchment', 'Linen', 'Silver'];
   const re = new RegExp(`(^|[^\\p{L}\\p{N}_])(${words.join('|')})(?=$|[^\\p{L}\\p{N}_])`, 'gu');
   return html.replace(re, (m, pre, w) => {
     const pl = players.find((x) => x.n === w);
     if (pl) return `${pre}<span class="who">${chip(pl.p.color)}${w}</span>`;
-    const r = RES.find((k) => RM[k].name === w);
+    const r = ALLC.find((k) => RM[k].name === w);
     return `${pre}${RM[r].ico} ${w}`;
   });
 }
@@ -690,6 +710,7 @@ function renderGame(v) {
       </div>
       <div class="dock" id="dock"></div>
       <aside class="side">
+        <section id="cr-sec" hidden><h3>⛵ Raiders <span class="hint" id="cr-count"></span></h3><div class="cr-track" id="cr-track"></div></section>
         <section><h3>Players <span class="hint" id="vp-target"></span></h3><div class="players" id="players"></div></section>
         <section><h3>Dice stats <button class="btn small" id="stats-more">Details</button></h3>
           <div class="hint" id="dice-sum" style="margin:-4px 0 6px"></div>
@@ -721,7 +742,7 @@ function renderGame(v) {
     applyMotion();
     bindChat();
   }
-  if (!isBuilding(v)) S.mode = null;
+  if (!isBuilding(v) || (CR_MAIN_MODES.includes(S.mode) && !(isMine(v) && v.turn.phase === 'main'))) { S.mode = null; S.cr = null; }
   renderStatus(v);
   renderBoardStatic(v);
   renderBoardDyn(v);
@@ -737,6 +758,7 @@ function renderGame(v) {
 
 const isMine = (v) => v.turn.current === v.me;
 const isBuilding = (v) => v.status === 'playing' && ((isMine(v) && v.turn.phase === 'main') || (v.turn.phase === 'builder' && v.turn.builder === v.me));
+const CR_MAIN_MODES = ['wmove', 'wpush', 'edict']; // board picks only for your own main phase
 
 function boardMode(v) {
   const t = v.turn; const mine = isMine(v);
@@ -744,12 +766,14 @@ function boardMode(v) {
   if (t.phase === 'setup' && mine) return t.setupNeed;
   if (t.phase === 'roadbuilding' && mine) return 'road';
   if (t.phase === 'robber' && mine) return 'bandit';
+  if (v.crowns && t.phase === 'raid' && v.hints.raidCities.length) return 'raid';
   return isBuilding(v) ? S.mode : null;
 }
 
 function statusText(v) {
   const t = v.turn; const mine = isMine(v); const cur = esc(pname(v, t.current));
   if (v.status === 'over') return `🏆 ${esc(pname(v, v.winner))} wins!`;
+  if (v.crowns) { const c = crStatus(v); if (c) return c; }
   switch (t.phase) {
     case 'order': {
       const o = v.order;
@@ -758,8 +782,10 @@ function statusText(v) {
       return `Rolling for turn order… waiting for ${waiting.map((id) => esc(pname(v, id))).join(', ')}`;
     }
     case 'setup': {
-      const what = t.setupNeed === 'village' ? (t.setupRound === 1 ? 'first settlement' : 'second settlement (it pays out right away)') : 'road next to it';
-      return mine ? `Place your ${what} — click a glowing spot` : `${cur} is placing their ${t.setupNeed === 'village' ? 'settlement' : 'road'}…`;
+      const second = t.setupRound === 2;
+      const piece = v.crowns && second ? 'city' : 'settlement';
+      const what = t.setupNeed === 'village' ? (second ? `second piece: a ${piece} (it pays out right away)` : 'first settlement') : 'road next to it';
+      return mine ? `Place your ${what} — click a glowing spot` : `${cur} is placing their ${t.setupNeed === 'village' ? piece : 'road'}…`;
     }
     case 'preroll': return mine ? 'Your turn — roll the dice' : `${cur} is about to roll…`;
     case 'discard': {
@@ -781,7 +807,8 @@ function renderStatus(v) {
   const needMe = v.status === 'playing' && (v.stalled || []).includes(v.me);
   el.className = 'status' + (needMe ? ' mine' : '');
   el.innerHTML = `<span class="turnchip" style="background:${pcolor(v, v.turn.phase === 'builder' ? v.turn.builder : v.turn.current)}"></span><span>${statusText(v)}</span>`;
-  $('#dice').innerHTML = v.turn.dice ? v.turn.dice.map(dieSvg).join('') : '';
+  $('#dice').innerHTML = v.turn.dice ? v.turn.dice.map((n, i) => dieSvg(n, v.crowns && i === 1)).join('') + (v.crowns && v.turn.event ? crEventDieSvg(v.turn.event) : '') : '';
+  if (v.crowns) crRenderTrack(v); else $('#cr-sec').hidden = true;
   // a 7 keeps a red banner on the board until the discards, the bandit move and the steal are done
   const t = v.turn;
   const rolledSeven = !!(t.dice && t.dice[0] + t.dice[1] === 7);
@@ -789,6 +816,13 @@ function renderStatus(v) {
   $('#dice').classList.toggle('seven', rolledSeven);
   const banner = $('#seven-banner');
   banner.hidden = !banditTime;
+  banner.classList.remove('raid');
+  if (v.crowns && v.status === 'playing' && t.phase === 'raid') {
+    banner.hidden = false; banner.classList.add('raid');
+    const waiting = Object.keys(v.crowns.pendingRaid);
+    banner.innerHTML = `<b>⚔️ The raiders won!</b><span>${v.hints.raidCities.length ? 'click one of your cities to lose — it becomes a settlement'
+      : `waiting for ${waiting.map((id) => esc(pname(v, id))).join(', ')} to choose a city`}</span>`;
+  }
   if (banditTime) {
     const cur = esc(pname(v, t.current)); const mine = isMine(v);
     let what;
@@ -805,13 +839,13 @@ function renderStatus(v) {
 const PIP_SPOTS = { 1: [[2, 2]], 2: [[1, 1], [3, 3]], 3: [[1, 1], [2, 2], [3, 3]], 4: [[1, 1], [3, 1], [1, 3], [3, 3]], 5: [[1, 1], [3, 1], [2, 2], [1, 3], [3, 3]], 6: [[1, 1], [3, 1], [1, 2], [3, 2], [1, 3], [3, 3]] };
 
 // flat die (top bar): a rounded square with pips
-function dieSvg(n) {
-  return `<svg viewBox="0 0 40 40" aria-label="die ${n}"><rect x="2" y="2" width="36" height="36" rx="8" fill="#fffaf0" stroke="#2b2118" stroke-width="2"/>${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.6" fill="#2b2118"/>`).join('')}</svg>`;
+function dieSvg(n, red) {
+  return `<svg viewBox="0 0 40 40" aria-label="${red ? 'red ' : ''}die ${n}"><rect x="2" y="2" width="36" height="36" rx="8" fill="${red ? '#c8372d' : '#fffaf0'}" stroke="#2b2118" stroke-width="2"/>${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.6" fill="${red ? '#fff' : '#2b2118'}"/>`).join('')}</svg>`;
 }
 
 // pips only, for the faces of the 3D dice — the face itself is a solid square so the cube has no gaps
-function pipsSvg(n) {
-  return `<svg viewBox="0 0 40 40" aria-hidden="true">${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.8" fill="#2b2118"/>`).join('')}</svg>`;
+function pipsSvg(n, color = '#2b2118') {
+  return `<svg viewBox="0 0 40 40" aria-hidden="true">${PIP_SPOTS[n].map(([x, y]) => `<circle cx="${x * 10}" cy="${y * 10}" r="3.8" fill="${color}"/>`).join('')}</svg>`;
 }
 
 // ---------- board ----------
@@ -841,7 +875,7 @@ const BOARD_DEFS = [
   '<filter id="piece-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.2" flood-color="#000" flood-opacity=".45"/></filter>',
   '<radialGradient id="token" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffdf6"/><stop offset="1" stop-color="#ecdcb8"/></radialGradient>',
   '<radialGradient id="sand" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#f3e2b4"/><stop offset="1" stop-color="#dcc188"/></radialGradient>',
-  ...Object.keys(RM).map((r) => `<linearGradient id="g-${r}" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="${mixHex(RM[r].color, '#ffffff', 0.2)}"/><stop offset=".55" stop-color="${RM[r].color}"/><stop offset="1" stop-color="${mixHex(RM[r].color, RM[r].deep, 0.35)}"/></linearGradient>`),
+  ...Object.keys(RM).filter((r) => RM[r].color).map((r) => `<linearGradient id="g-${r}" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="${mixHex(RM[r].color, '#ffffff', 0.2)}"/><stop offset=".55" stop-color="${RM[r].color}"/><stop offset="1" stop-color="${mixHex(RM[r].color, RM[r].deep, 0.35)}"/></linearGradient>`),
   ...Object.entries(TERRAIN_TEXTURE).map(([r, [w, h, d]]) => `<pattern id="p-${r}" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${d}</pattern>`),
 ].join('');
 
@@ -973,15 +1007,17 @@ function renderBoardDyn(v) {
     out += `<g${anim('r' + e, 'grow')}><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#1d150e" stroke-width="10" stroke-linecap="round"/>`;
     out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${pcolor(v, owner)}" stroke-width="6" stroke-linecap="round"/></g>`;
   }
+  if (v.crowns) out += crBoardUnder(v);
   for (const [vid, bd] of Object.entries(v.buildings)) {
     const V = b.vertices[vid];
     out += `<g${anim('b' + vid + bd.type, 'drop')}>${bd.type === 'town' ? townShape(V.x * U, V.y * U, pcolor(v, bd.owner)) : villageShape(V.x * U, V.y * U, pcolor(v, bd.owner))}</g>`;
   }
+  if (v.crowns) out += crBoardOver(v, anim);
   // fading rings around pieces built in the last few seconds
   for (const [k, at] of S.recent || []) {
     const age = Date.now() - at;
     let x, y;
-    if (k[0] === 'b') { const V = b.vertices[parseInt(k.slice(1), 10)]; x = V.x * U; y = V.y * U - 2; }
+    if (k[0] === 'b' || k[0] === 'w') { const V = b.vertices[parseInt(k.slice(1), 10)]; x = V.x * U; y = V.y * U - 2; }
     else { const E = b.edges[k.slice(1)]; x = (b.vertices[E.a].x + b.vertices[E.b].x) / 2 * U; y = (b.vertices[E.a].y + b.vertices[E.b].y) / 2 * U; }
     out += `<circle class="fresh" cx="${x}" cy="${y}" r="20" style="animation-delay:-${age}ms"/>`;
   }
@@ -1014,6 +1050,8 @@ function renderBoardDyn(v) {
     for (const vid of v.hints.towns) { const V = b.vertices[vid]; hint += `<circle class="hint-t" data-vertex="${vid}" cx="${V.x * U}" cy="${V.y * U - 2}" r="16"/>`; }
   } else if (mode === 'bandit') {
     for (const hx of v.hints.hexes.map((id) => b.hexes[id])) low +=`<polygon class="hex-hit" data-hex="${hx.id}" points="${hexPoints(v, hx)}"/>`;
+  } else if (v.crowns && mode) {
+    const h = crBoardHints(v, mode); low += h.low; hint += h.hint;
   }
   $('#g-low').innerHTML = low;
   $('#g-hint').innerHTML = hint;
@@ -1025,6 +1063,7 @@ function onBoardClick(e) {
   if (!v || !t.dataset) return;
   const mode = boardMode(v);
   const done = (ok) => { if (ok) { S.mode = null; render(); } };
+  if (v.crowns && crBoardClick(v, mode, e)) return;
   if (t.dataset.edge !== undefined && mode === 'road') {
     send({ type: 'buildRoad', edge: Number(t.dataset.edge) }).then(done);
   } else if (t.dataset.vertex !== undefined && mode === 'village') {
@@ -1129,10 +1168,13 @@ function renderDock(v) {
     road: 'Road', village: 'Settlement (1 point)', town: 'City — upgrades a settlement (2 points)',
     scroll: 'Development card — draw a random card from the deck',
   };
-  const buildBtns = ['road', 'village', 'town', 'scroll'].map((k) => `
-    <button class="btn build ${S.mode === k ? 'on' : ''}" data-build="${k}" ${can[k] ? '' : 'disabled'} title="${what[k]} — ${left[k]} left · shortcut ${['road', 'village', 'town', 'scroll'].indexOf(k) + 1}">
-      <span>${BUILD_ICO[k]} ${label[k]}</span><span class="cost">${costHtml(v.cost[k], hand)}</span></button>`).join('')
-    + '<button class="btn small" data-act="cardref" title="What do development cards do?" aria-label="Development card reference">ℹ️</button>';
+  const kinds = v.crowns ? ['road', 'village', 'town', 'wall', 'warden'] : ['road', 'village', 'town', 'scroll'];
+  if (v.crowns) crDockCan(v, me, hand, building, can, left, label, what);
+  const buildBtns = kinds.map((k) => `
+    <button class="btn build ${S.mode === k ? 'on' : ''}" data-build="${k}" ${can[k] ? '' : 'disabled'} title="${what[k]} — ${left[k]} left · shortcut ${kinds.indexOf(k) + 1}">
+      <span>${BUILD_ICO[k]} ${label[k]}</span><span class="cost">${costHtml(v.crowns && v.crowns.costs[k] ? v.crowns.costs[k] : v.cost[k], hand)}</span></button>`).join('')
+    + (v.crowns ? '<button class="btn small" data-act="crref" title="How Crowns & Raiders works, and every edict" aria-label="Crowns and Raiders rules">ℹ️</button>'
+      : '<button class="btn small" data-act="cardref" title="What do development cards do?" aria-label="Development card reference">ℹ️</button>');
   let main = '';
   if (v.status === 'playing') {
     if (t.phase === 'order' && (v.stalled || []).includes(v.me)) main += '<button class="btn primary pulse" data-act="roll" title="Shortcut: R">🎲 Roll for turn order</button>';
@@ -1140,6 +1182,7 @@ function renderDock(v) {
     if (mine && t.phase === 'main') main += '<button class="btn" data-act="trade" title="Trade with players (shortcut: T)">🤝 Trade</button><button class="btn" data-act="bank" title="Trade with the bank (shortcut: B)">🏦 Bank</button><button class="btn primary" data-act="end" title="Shortcut: E">End turn ➜</button>';
     if (t.phase === 'builder' && t.builder === v.me) main += '<button class="btn primary pulse" data-act="pass" title="Shortcut: E">Done building</button>';
     if (mine && t.phase === 'roadbuilding') main += '<button class="btn" data-act="skipRoads">Skip free roads</button>';
+    if (v.crowns) main += crDockExtraButtons(v);
   } else if (v.status === 'over' && S.hideOver) {
     main += '<button class="btn primary" data-act="results">🏆 Show results</button>';
   }
@@ -1159,16 +1202,18 @@ function renderDock(v) {
       <div class="dc-foot">${foot}</div></div>`;
   }).join('');
   $('#dock').innerHTML = `
-    <div class="hand">${RES.map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background-color:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
+    <div class="hand">${handKinds(v).map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background-color:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
+    ${v.crowns ? crDockPanel(v, hand) : ''}
     ${scrolls ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
   $('#dock').querySelectorAll('[data-build]').forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.build;
       if (k === 'scroll') return send({ type: 'buyScroll' });
+      S.cr = null;
       S.mode = S.mode === k ? null : k;
-      renderDock(S.v); renderBoardDyn(S.v);
+      renderStatus(S.v); renderDock(S.v); renderBoardDyn(S.v);
     };
   });
   $('#dock').querySelectorAll('[data-act]').forEach((b) => {
@@ -1182,8 +1227,10 @@ function renderDock(v) {
       else if (a === 'bank') openModal('bank');
       else if (a === 'results') { S.hideOver = false; renderGame(S.v); }
       else if (a === 'cardref') openModal('cardref');
+      else if (a === 'crref') openModal('crref');
     };
   });
+  if (v.crowns) crBindDock(v);
   $('#dock').querySelectorAll('[data-play]').forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.play;
@@ -1208,14 +1255,14 @@ function renderPlayers(v) {
         ${p.connected || S.replay ? '' : '<span class="badge">offline</span>'}
         <span class="pl-vp" title="victory points">${vpTxt}</span></div>
       <div class="pl-stats">
-        <span title="resource cards">🃏 ${p.cards}</span><span title="scrolls">📜 ${p.scrolls}</span>
-        <span title="guards played">🛡️ ${p.guards}</span><span title="longest road">🛤️ ${p.roadLen}</span>
+        <span title="cards in hand">🃏 ${p.cards}</span>${p.cr ? crPlayerStats(v, p) : `<span title="scrolls">📜 ${p.scrolls}</span>
+        <span title="guards played">🛡️ ${p.guards}</span>`}<span title="longest road">🛤️ ${p.roadLen}</span>
         ${p.longest ? '<span class="badge award">Grand Route +2</span>' : ''}${p.army ? '<span class="badge award">Strongest Watch +2</span>' : ''}
         ${v.turn.phase === 'order' && v.order.rolls[p.id] !== undefined ? `<span class="badge award">🎲 ${v.order.rolls[p.id]}</span>` : ''}
         ${waiting ? '<span class="badge">⏳ acting</span>' : ''}
         ${canSkip ? '<button class="btn small" data-skip>Skip</button>' : ''}
       </div>
-      ${S.replay && p.hand ? `<div class="pl-hand" title="Cards in hand">${RES.filter((r) => p.hand[r]).map((r) => `<span>${RM[r].ico}<b>${p.hand[r]}</b></span>`).join('') || '<span class="hint">no cards</span>'}</div>` : ''}
+      ${S.replay && p.hand ? `<div class="pl-hand" title="Cards in hand">${handKinds(v).filter((r) => p.hand[r]).map((r) => `<span>${RM[r].ico}<b>${p.hand[r]}</b></span>`).join('') || '<span class="hint">no cards</span>'}</div>` : ''}
       </div>`;
   }).join('');
   const hostP = v.players.find((p) => p.id === v.hostId);
@@ -1225,7 +1272,7 @@ function renderPlayers(v) {
   }
   const sk = $('#players [data-skip]');
   if (sk) sk.onclick = () => { if (confirm('Skip ahead for the player(s) holding up the game? (Random discards / auto-roll / end their turn)')) send({ type: 'skip' }); };
-  $('#bankinfo').textContent = v.bank ? `bank: ${RES.map((r) => RM[r].ico + v.bank[r]).join(' ')} · 📜${v.deckCount}` : '';
+  $('#bankinfo').textContent = v.bank ? `bank: ${handKinds(v).map((r) => RM[r].ico + v.bank[r]).join(' ')}${v.crowns ? '' : ` · 📜${v.deckCount}`}` : '';
 }
 
 function renderTrade(v) {
@@ -1364,7 +1411,7 @@ function closeModal() {
 // limits: most you can pick of each resource (your hand) · cap: most you can pick in total (e.g. cards owed in a discard)
 function stepperGrid(prefix, counts, limits, cap) {
   const full = cap !== undefined && cnt(counts) >= cap;
-  return `<div class="steppers">${RES.map((r) => `<div class="stepper ${counts[r] ? 'set' : ''}">
+  return `<div class="steppers">${handKinds(S.v).map((r) => `<div class="stepper ${counts[r] ? 'set' : ''}">
     <div class="ico">${RM[r].ico}</div><div class="n">${counts[r]}</div>
     ${limits ? `<div class="have">of ${limits[r]}</div>` : ''}
     <div class="ctl"><button class="btn small" data-step="${prefix}:${r}:-1" ${counts[r] <= 0 ? 'disabled' : ''} aria-label="less ${RM[r].name}">−</button>
@@ -1375,9 +1422,9 @@ function stepperGrid(prefix, counts, limits, cap) {
 // how many lots you've given and by what the bank still holds.
 function bankGrid(v, side) {
   const u = S.ui; const hand = v.hand || zero();
-  const lots = RES.reduce((s, r) => s + u.bgive[r] / v.rates[r], 0);
+  const lots = ALLC.reduce((s, r) => s + (u.bgive[r] || 0) / v.rates[r], 0);
   const counts = u[side];
-  return `<div class="steppers">${RES.map((r) => {
+  return `<div class="steppers">${handKinds(v).map((r) => {
     const step = side === 'bgive' ? v.rates[r] : 1;
     const other = side === 'bgive' ? u.bget[r] : u.bgive[r];
     const canAdd = side === 'bgive' ? counts[r] + step <= hand[r] && !other
@@ -1399,12 +1446,15 @@ function renderModal(v) {
   if (v.status === 'over' && !S.replay && !['dice', 'cardref'].includes(S.modal)) kind = 'over';
   else if (t.phase === 'discard' && v.pendingDiscard[v.me]) { if (S.modal !== 'discard') { S.modal = 'discard'; S.ui = { cards: zero() }; } kind = 'discard'; }
   else if (t.phase === 'steal' && isMine(v)) kind = 'steal';
-  else if (kind === 'discard') kind = null;
+  else if (v.crowns && v.status === 'playing' && v.crowns.me && v.crowns.me.freePicks > 0) kind = 'freepick';
+  else if (v.crowns && v.status === 'playing' && v.crowns.me && v.crowns.me.edictPicks > 0) kind = 'edictpick';
+  else if (kind === 'discard' || kind === 'freepick' || kind === 'edictpick') kind = null;
+  if (kind && kind.startsWith('cr-') && !crModalValid(v, kind)) kind = null;
   if (kind === 'trade' && !(isMine(v) && t.phase === 'main')) kind = null;
   if (kind === 'counter' && !(v.trade && v.trade.id === S.ui.tradeId && v.trade.from !== v.me)) kind = null;
   if ((kind === 'plenty' || kind === 'monopoly') && !(isMine(v) && ['preroll', 'main'].includes(t.phase) && !t.devPlayed)) kind = null;
   if (!kind) { root.innerHTML = ''; S.modal = null; return; }
-  if (S.modal !== kind && kind !== 'over' && kind !== 'steal') S.modal = kind;
+  if (S.modal !== kind && !['over', 'steal', 'freepick', 'edictpick'].includes(kind)) S.modal = kind;
 
   let html = '';
   if (kind === 'discard') {
@@ -1446,7 +1496,7 @@ function renderModal(v) {
     let body;
     if (u.tab === 'players') {
       const gN = cnt(u.give), rN = cnt(u.get);
-      const clash = RES.some((r) => u.give[r] && u.get[r]);
+      const clash = ALLC.some((r) => u.give[r] && u.get[r]);
       body = `<p class="hint" style="margin:0">Everyone sees your offer and can accept or counter; you choose who to trade with.</p>
         <b>You give</b>${stepperGrid('give', u.give, hand)}
         <b>You want</b>${stepperGrid('get', u.get, null)}
@@ -1454,25 +1504,27 @@ function renderModal(v) {
           <button class="btn primary" data-do="propose" ${gN && rN && !clash ? '' : 'disabled'}>Offer to everyone</button></div>`;
     } else {
       // every lot you give (4, or 3/2 at a harbor) buys one card of your choice
-      const lots = RES.reduce((s, r) => s + u.bgive[r] / v.rates[r], 0);
+      const lots = ALLC.reduce((s, r) => s + (u.bgive[r] || 0) / v.rates[r], 0);
       const picked = cnt(u.bget);
       const ok = lots > 0 && picked === lots;
       const status = !lots ? 'Add what you give — each + adds one full lot at your rate.'
         : picked < lots ? `You can take <b>${lots - picked}</b> more card${lots - picked === 1 ? '' : 's'}.`
         : picked > lots ? `Too many — remove ${picked - lots}.` : 'Ready.';
-      body = `<p class="hint" style="margin:0">Your rates: ${RES.map((r) => `${RM[r].ico} <b>${v.rates[r]}:1</b>${v.rates[r] < 4 ? '<span title="harbor rate"> ⚓</span>' : ''}`).join(' · ')}${
-        RES.some((r) => v.rates[r] < 4) ? '' : ' — build on a harbor ⚓ for better rates'}</p>
+      body = `<p class="hint" style="margin:0">Your rates: ${handKinds(v).map((r) => `${RM[r].ico} <b>${v.rates[r]}:1</b>${v.rates[r] < 4 ? '<span title="harbor rate"> ⚓</span>' : ''}`).join(' · ')}${
+        RES.some((r) => v.rates[r] < 4) || v.crowns ? '' : ' — build on a harbor ⚓ for better rates'}</p>
         <b>You give</b>${bankGrid(v, 'bgive')}
         <b>You want</b>${bankGrid(v, 'bget')}
         <div class="foot"><span class="hint" style="flex:1">${status}</span>
-          <button class="btn primary" data-do="bank" ${ok ? '' : 'disabled'}>${ok ? `Trade with the bank: ${RES.filter((r) => u.bgive[r]).map((r) => RM[r].ico + '×' + u.bgive[r]).join(' ')} → ${RES.filter((r) => u.bget[r]).map((r) => RM[r].ico + '×' + u.bget[r]).join(' ')}` : 'Trade with the bank'}</button></div>`;
+          <button class="btn primary" data-do="bank" ${ok ? '' : 'disabled'}>${ok ? `Trade with the bank: ${ALLC.filter((r) => u.bgive[r]).map((r) => RM[r].ico + '×' + u.bgive[r]).join(' ')} → ${ALLC.filter((r) => u.bget[r]).map((r) => RM[r].ico + '×' + u.bget[r]).join(' ')}` : 'Trade with the bank'}</button></div>`;
     }
     html = `<h2>Trade</h2>${tabs}${body}<div class="foot"><button class="btn" data-do="close">Close</button></div>`;
   } else if (kind === 'dice') {
     html = diceModal(v);
+  } else if (kind === 'crref' || kind === 'freepick' || kind === 'edictpick' || kind.startsWith('cr-')) {
+    html = crModalHtml(v, kind);
   } else if (kind === 'counter') {
     const u = S.ui; const gN = cnt(u.give), rN = cnt(u.get);
-    const clash = RES.some((r) => u.give[r] && u.get[r]);
+    const clash = ALLC.some((r) => u.give[r] && u.get[r]);
     html = `<h2>Counter-offer to ${esc(pname(v, v.trade.from))}</h2>
       <p class="hint" style="margin:0">They see your terms and can accept them instead of their original offer.</p>
       <b>You give</b>${stepperGrid('give', u.give, hand)}
@@ -1521,6 +1573,7 @@ function renderModal(v) {
       setTimeout(() => send({ type: 'steal', victim, card: Number(card) }), 250);
     };
   });
+  if (v.crowns || kind === 'crref') crBindModal(v, root, kind);
   root.querySelectorAll('[data-pick]').forEach((b) => { b.onclick = () => { S.ui.picks.push(b.dataset.pick); renderModal(S.v); }; });
   root.querySelectorAll('[data-mono]').forEach((b) => { b.onclick = () => { S.ui.pick = b.dataset.mono; renderModal(S.v); }; });
   root.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { S.ui.tab = b.dataset.tab; renderModal(S.v); }; });
@@ -1543,7 +1596,7 @@ function renderModal(v) {
     };
   });
   const bd = root.querySelector('[data-backdrop]');
-  bd.onclick = (e) => { if (e.target === bd && ['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(kind)) closeModal(); };
+  bd.onclick = (e) => { if (e.target === bd && (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref'].includes(kind) || kind.startsWith('cr-'))) closeModal(); };
 }
 
 // Turn timer: a countdown pill in the top bar ("0:42 · Marlo") plus a bar draining across the top of
@@ -1572,8 +1625,8 @@ setInterval(() => {
 // Shortcuts: R roll · E end turn / done building · T trade · B bank · 1–4 road/settlement/city/dev card · Esc cancel
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref'].includes(S.modal)) closeModal();
-    else if (S.mode) { S.mode = null; if (S.v) { renderDock(S.v); renderBoardDyn(S.v); } }
+    if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref'].includes(S.modal) || (S.modal && S.modal.startsWith('cr-'))) closeModal();
+    else if (S.mode) { S.mode = null; S.cr = null; if (S.v) { renderStatus(S.v); renderDock(S.v); renderBoardDyn(S.v); } }
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || S.modal) return;
@@ -1584,7 +1637,8 @@ document.addEventListener('keydown', (e) => {
       ' ': () => replayPlay(!R.playing), Home: () => { replayPlay(false); replayTo(0, true); }, End: () => { replayPlay(false); replayTo(R.rp.length, true); } };
     if (keys[e.key]) { e.preventDefault(); keys[e.key](); return; }
   }
-  const key = { r: 'roll', e: 'end', t: 'trade', b: 'bank', 1: 'b-road', 2: 'b-village', 3: 'b-town', 4: 'b-scroll' }[e.key.toLowerCase()];
+  const crowns = S.v && S.v.crowns;
+  const key = { r: 'roll', e: 'end', t: 'trade', b: 'bank', 1: 'b-road', 2: 'b-village', 3: 'b-town', 4: crowns ? 'b-wall' : 'b-scroll', ...(crowns ? { 5: 'b-warden' } : {}) }[e.key.toLowerCase()];
   if (S.screen === 'game' && ['+', '=', '-', '_', '0'].includes(e.key)) {
     e.preventDefault();
     if (e.key === '0') { S.vb = S.vb0.slice(); applyVB(); } else zoomBy(e.key === '-' || e.key === '_' ? 1 / 1.4 : 1.4);
@@ -1602,7 +1656,7 @@ document.addEventListener('keydown', (e) => {
 async function loadEngine() {
   if (S.engine) return S.engine;
   const v = encodeURIComponent((S.build && S.build.commit) || '');
-  const files = ['notation', 'game', 'save'];
+  const files = ['notation', 'crowns', 'game', 'save'];
   const srcs = await Promise.all(files.map((f) => fetch(`/lib/${f}.js?v=${v}`).then((r) => {
     if (!r.ok) throw new Error('Could not load the replay engine');
     return r.text();
@@ -1718,6 +1772,9 @@ const MOVE_TEXT = {
   buildTown: 'built a city', buildRoad: 'built a road', skipRoads: 'skipped free roads', buyScroll: 'bought a development card',
   playScroll: 'played a development card', bankTrade: 'traded with the bank', proposeTrade: 'offered a trade', respondTrade: 'answered a trade',
   confirmTrade: 'completed a trade', cancelTrade: 'withdrew a trade', endTurn: 'ended their turn', builderDone: 'finished building', skip: 'skipped a stalled player',
+  buildWall: 'built a city wall', buildWarden: 'raised a warden', activateWarden: 'activated a warden', promoteWarden: 'promoted a warden',
+  wardenMove: 'moved a warden', wardenDisplace: 'pushed a warden away', wardenChase: 'chased the bandit', improve: 'improved a city track',
+  raidLose: 'lost a city to the raiders', takeFree: 'took a free resource', drawEdict: 'drew an edict', playEdict: 'played an edict',
 };
 
 async function openReplay(file, opts = {}) {

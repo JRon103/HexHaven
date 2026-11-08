@@ -6,13 +6,18 @@
 //   Corner    "row.tile" + N|NE|SE|S|SW|NW                                              e.g. "3.2SE"
 //   Side      "row.tile" + NE|E|SE|SW|W|NW (side NE runs from corner N to corner NE)   e.g. "3.2E"
 //   Cards     "Wo1 Cl2 Fl0 Wh3 Ir1" (wood, clay, fleece, wheat, iron; zero counts may be left out; "-" = none)
+//             Crowns & Raiders adds the commodities Pa parchment, Li linen, Si silver
 //   Move      "<seat> <action> [details]"  e.g. "2 buildRoad 3.2E", "4 steal @1 #0", "- timeout"
 
 const RES = ['wood', 'clay', 'fleece', 'wheat', 'iron'];
+const COM = ['parchment', 'linen', 'silver'];
+const CARDS = [...RES, ...COM];
 const CORNER = ['N', 'NE', 'SE', 'S', 'SW', 'NW'];
 const SIDE = ['NE', 'E', 'SE', 'SW', 'W', 'NW'];
 const TILE = { wood: 'Wo', clay: 'Cl', fleece: 'Fl', wheat: 'Wh', iron: 'Ir', desert: 'De' };
 const TILE_BACK = Object.fromEntries(Object.entries(TILE).map(([k, v]) => [v, k]));
+const CARD = { wood: 'Wo', clay: 'Cl', fleece: 'Fl', wheat: 'Wh', iron: 'Ir', parchment: 'Pa', linen: 'Li', silver: 'Si' };
+const CARD_BACK = Object.fromEntries(Object.entries(CARD).map(([k, v]) => [v, k]));
 
 function fail(msg) { const e = new Error(msg); e.user = true; throw e; }
 
@@ -55,22 +60,28 @@ function geometry(board) {
 }
 
 // ---------- cards ----------
-const cards = (h) => RES.filter((r) => h && h[r]).map((r) => `${TILE[r]}${h[r]}`).join(' ') || '-';
+const cards = (h) => CARDS.filter((r) => h && h[r]).map((r) => `${CARD[r]}${h[r]}`).join(' ') || '-';
 function uncards(s) {
-  const h = { wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0 };
+  const h = Object.fromEntries(CARDS.map((r) => [r, 0]));
   const str = String(s == null ? '' : s).trim();
   if (!str || str === '-') return h;
   for (const t of str.split(/\s+/)) {
     if (t === '-') continue; // "none" marker left in by a hand edit, e.g. "Wo9 -"
-    const r = TILE_BACK[t.slice(0, 2)[0].toUpperCase() + t.slice(1, 2).toLowerCase()];
+    const r = CARD_BACK[t.slice(0, 1).toUpperCase() + t.slice(1, 2).toLowerCase()];
     const n = Number(t.slice(2));
-    if (!r || r === 'desert' || !Number.isInteger(n) || n < 0) fail(`Unknown cards "${t}" (use Wo, Cl, Fl, Wh, Ir followed by a count)`);
+    if (!r || !Number.isInteger(n) || n < 0) fail(`Unknown cards "${t}" (use Wo, Cl, Fl, Wh, Ir, Pa, Li, Si followed by a count)`);
     h[r] += n;
   }
   return h;
 }
 
 // ---------- moves ----------
+// Crowns & Raiders moves carry named details, e.g. "2 wardenDisplace from=3.2SE to=3.3N" or "4 playEdict spy victim=@1".
+const CROWNS_MOVES = new Set(['buildWall', 'buildWarden', 'activateWarden', 'promoteWarden', 'wardenMove', 'wardenDisplace', 'wardenChase',
+  'improve', 'raidLose', 'takeFree', 'drawEdict', 'playEdict']);
+const KEY_KIND = { vertex: 'corner', vertex2: 'corner', from: 'corner', to: 'corner', hex: 'tile', hex2: 'tile', edge: 'side', victim: 'seat' };
+const KEY_ORDER = ['kind', 'track', 'deck', 'res', 'vertex', 'vertex2', 'from', 'to', 'hex', 'hex2', 'edge', 'victim', 'd1', 'd2'];
+
 // Moves never contain server-made ids: players are seat numbers, "respondTrade" answers the open offer.
 function encodeMove(game, pid, a) {
   const geo = geometry(game.board);
@@ -92,7 +103,20 @@ function encodeMove(game, pid, a) {
       if (a.counter) parts.push('counter', 'give', cards(a.counter.give), 'get', cards(a.counter.get));
       else parts.push(a.accept ? 'yes' : 'no');
       break;
-    default: break; // roll, endTurn, builderDone, skipRoads, buyScroll, cancelTrade, skip
+    default:
+      if (CROWNS_MOVES.has(a.type)) {
+        for (const k of KEY_ORDER) {
+          const val = a[k];
+          if (val === undefined || val === null || val === '') continue;
+          const kind = KEY_KIND[k];
+          if (kind === 'corner') parts.push(`${k}=${geo.corner(Number(val))}`);
+          else if (kind === 'tile') parts.push(`${k}=${geo.tile(Number(val))}`);
+          else if (kind === 'side') parts.push(`${k}=${geo.side(Number(val))}`);
+          else if (kind === 'seat') parts.push(`${k}=@${seatOf(val)}`);
+          else if (/^[\w-]+$/.test(String(val))) parts.push(`${k}=${val}`);
+        }
+      }
+      break; // roll, endTurn, builderDone, skipRoads, buyScroll, cancelTrade, skip
   }
   return parts.join(' ');
 }
@@ -125,9 +149,23 @@ function decodeMove(game, line) {
       if (rest[0] === 'counter') a.counter = { give: uncards(between('give', 'get')), get: uncards(between('get')) };
       else a.accept = rest[0] === 'yes';
       break;
-    default: break;
+    default:
+      if (CROWNS_MOVES.has(type)) {
+        for (const tk of rest) {
+          const m = /^(\w+)=(.+)$/.exec(tk);
+          if (!m || !KEY_ORDER.includes(m[1])) fail(`Unknown detail "${tk}" in move "${line}"`);
+          const [, k, val] = m; const kind = KEY_KIND[k];
+          if (kind === 'corner') a[k] = geo.cornerId(val);
+          else if (kind === 'tile') a[k] = geo.tileId(val);
+          else if (kind === 'side') a[k] = geo.sideId(val);
+          else if (kind === 'seat') a[k] = bySeat(val.replace('@', ''));
+          else if (k === 'd1' || k === 'd2') a[k] = Number(val);
+          else a[k] = val;
+        }
+      }
+      break;
   }
   return { pid, action: a };
 }
 
-module.exports = { RES, CORNER, SIDE, TILE, TILE_BACK, geometry, cards, uncards, encodeMove, decodeMove };
+module.exports = { RES, COM, CARDS, CORNER, SIDE, TILE, TILE_BACK, CARD, CARD_BACK, CROWNS_MOVES, geometry, cards, uncards, encodeMove, decodeMove };

@@ -1,10 +1,13 @@
 'use strict';
 // Hexhaven rules engine. Pure state + actions; the server owns one game object per room.
 const crypto = require('crypto');
-const { encodeMove } = require('./notation');
+const { encodeMove, CROWNS_MOVES } = require('./notation');
+const CR = require('./crowns');
 
 const RES = ['wood', 'clay', 'fleece', 'wheat', 'iron'];
-const RES_NAME = { wood: 'Wood', clay: 'Clay', fleece: 'Fleece', wheat: 'Wheat', iron: 'Iron' };
+const COM = CR.COM; // commodities (Crowns & Raiders only): parchment, linen, silver
+const CARDS = [...RES, ...COM]; // everything that can sit in a hand
+const RES_NAME = { wood: 'Wood', clay: 'Clay', fleece: 'Fleece', wheat: 'Wheat', iron: 'Iron', parchment: 'Parchment', linen: 'Linen', silver: 'Silver' };
 const COST = {
   road: { wood: 1, clay: 1 },
   village: { wood: 1, clay: 1, fleece: 1, wheat: 1 },
@@ -34,14 +37,14 @@ function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = rint(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-const emptyHand = () => ({ wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0 });
-const handCount = (h) => RES.reduce((s, r) => s + h[r], 0);
-const hasRes = (h, cost) => RES.every((r) => h[r] >= (cost[r] || 0));
+const emptyHand = () => ({ wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0, parchment: 0, linen: 0, silver: 0 });
+const handCount = (h) => CARDS.reduce((s, r) => s + (h[r] || 0), 0);
+const hasRes = (h, cost) => CARDS.every((r) => (h[r] || 0) >= (cost[r] || 0));
 function move(from, to, cost) {
-  for (const r of RES) { const c = cost[r] || 0; from[r] -= c; to[r] += c; }
+  for (const r of CARDS) { const c = cost[r] || 0; if (!c) continue; from[r] = (from[r] || 0) - c; to[r] = (to[r] || 0) + c; }
 }
 function fmtRes(cost) {
-  return RES.filter((r) => cost[r]).map((r) => `${cost[r]} ${RES_NAME[r]}`).join(', ') || 'nothing';
+  return CARDS.filter((r) => cost[r]).map((r) => `${cost[r]} ${RES_NAME[r]}`).join(', ') || 'nothing';
 }
 function fail(msg) { const e = new Error(msg); e.user = true; throw e; }
 
@@ -162,7 +165,7 @@ function buildBoard(cfg) {
 function createGame(code) {
   return {
     code, createdAt: Date.now(), updatedAt: Date.now(), status: 'lobby', hostId: null,
-    settings: { vpTarget: 10, builderPhase: true, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false },
+    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false },
     players: [], log: [], logSeq: 0, version: 0, rng: { s: newSeed() },
   };
 }
@@ -206,7 +209,8 @@ function startGame(game) {
     p.pieces = { ...PIECES };
   }
   game.board = buildBoard(cfg);
-  game.bank = {}; for (const r of RES) game.bank[r] = cfg.bank;
+  game.bank = emptyHand(); for (const r of RES) game.bank[r] = cfg.bank;
+  if (game.settings.mode === 'crowns') CR.setup(game, cfg); else delete game.cr;
   game.deck = [];
   for (const [k, c] of Object.entries(cfg.deck)) for (let i = 0; i < c; i++) game.deck.push(k);
   shuffle(game.deck);
@@ -242,10 +246,38 @@ function historyStart(game) {
   return copy;
 }
 
-function rollDice(game, pid, kind) {
-  const d = [1 + rint(6), 1 + rint(6)];
+// After the dice (and any raid): harvest, or the 7 — discards, then the bandit.
+function afterRoll(game, sum) {
+  const t = game.turn; const p = current(game);
+  if (sum !== 7) { produce(game, sum); t.phase = 'main'; return; }
+  game.pendingDiscard = {};
+  for (const o of game.players) {
+    const c = handCount(o.hand);
+    if (c > discardLimit(game, o)) game.pendingDiscard[o.id] = Math.floor(c / 2);
+  }
+  t.afterRobber = 'main';
+  const names = Object.keys(game.pendingDiscard).map((id) => P(game, id).name);
+  if (names.length) { t.phase = 'discard'; log(game, `Bandits! ${names.join(', ')} must discard half their cards.`); }
+  else afterDiscards(game);
+}
+// once everyone has discarded: the roller moves the bandit (crowns: not until the raiders have come once)
+function afterDiscards(game) {
+  const t = game.turn;
+  if (CR.on(game) && !CR.banditFree(game)) {
+    t.phase = t.afterRobber || 'main';
+    log(game, '🏜️ The bandit stays in the dunes until the raiders first reach the island.');
+    return;
+  }
+  t.phase = 'robber';
+  log(game, `Bandits! ${current(game).name} moves the bandit.`);
+}
+const discardLimit = (game, p) => game.settings.discardLimit + (CR.on(game) ? CR.wallBonus(game, p) : 0);
+
+function rollDice(game, pid, kind, fixed) {
+  const d = fixed ? [fixed[0], fixed[1]] : [1 + rint(6), 1 + rint(6)];
   game.rollSeq = (game.rollSeq || 0) + 1;
   game.lastRoll = { id: game.rollSeq, d, by: pid, kind };
+  if (kind === 'turn' && fixed) game.lastRoll.fixed = true;
   return d;
 }
 
@@ -276,8 +308,8 @@ function orderRoll(game, p) {
 
 function resetToLobby(game) {
   for (const k of ['board', 'bank', 'deck', 'bandit', 'buildings', 'roads', 'longestHolder', 'armyHolder',
-    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history']) delete game[k];
-  for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces', 'seat']) delete p[k];
+    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history', 'cr']) delete game[k];
+  for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces', 'seat', 'cr']) delete p[k];
   game.status = 'lobby';
   log(game, 'Back in the lobby — the host can start a new game.');
 }
@@ -290,7 +322,7 @@ const setupIdx = (pos, n) => (pos < n ? pos : 2 * n - 1 - pos);
 
 function canPlaceVillage(game, pid, v, setup) {
   const V = game.board.vertices[v];
-  if (!V || game.buildings[v]) return false;
+  if (!V || game.buildings[v] || CR.wardenAt(game, v)) return false;
   if (V.adj.some((a) => game.buildings[a])) return false;
   if (setup) return true;
   return V.edges.some((e) => game.roads[e] === pid);
@@ -300,9 +332,9 @@ function canPlaceRoad(game, pid, e) {
   const E = game.board.edges[e];
   if (!E || game.roads[e] !== undefined) return false;
   for (const x of [E.a, E.b]) {
-    const b = game.buildings[x];
+    const b = game.buildings[x] || CR.wardenAt(game, x);
     if (b && b.owner === pid) return true;
-    if (b) continue; // opponent building blocks extension through this point
+    if (b) continue; // an opponent's building or warden blocks extension through this point
     if (game.board.vertices[x].edges.some((o) => o !== e && game.roads[o] === pid)) return true;
   }
   return false;
@@ -325,7 +357,7 @@ function roadLength(game, pid) {
       if (roads[e] !== pid || used.has(e)) continue;
       const E = board.edges[e]; const o = E.a === v ? E.b : E.a;
       used.add(e);
-      const ob = buildings[o];
+      const ob = buildings[o] || CR.wardenAt(game, o);
       m = Math.max(m, 1 + (ob && ob.owner !== pid ? 0 : dfs(o)));
       used.delete(e);
     }
@@ -364,6 +396,7 @@ function vp(game, p, hidden) {
   if (game.longestHolder === p.id) v += 2;
   if (game.armyHolder === p.id) v += 2;
   if (hidden) v += p.scrolls.filter((s) => s.type === 'vp').length;
+  if (CR.on(game)) v += CR.extraPoints(game, p);
   return v;
 }
 
@@ -381,16 +414,20 @@ function checkWin(game, pid) {
 
 function produce(game, sum) {
   const demand = {};
-  for (const r of RES) demand[r] = {};
+  for (const r of CARDS) demand[r] = {};
+  const crowns = CR.on(game);
   for (const h of game.board.hexes) {
     if (h.num !== sum || h.id === game.bandit || h.res === 'desert') continue;
     for (const v of h.v) {
       const b = game.buildings[v];
-      if (b) demand[h.res][b.owner] = (demand[h.res][b.owner] || 0) + (b.type === 'town' ? 2 : 1);
+      if (!b) continue;
+      // crowns: a city next to forest/pasture/mountains takes 1 resource + 1 commodity instead of 2 resources
+      const gains = crowns ? CR.cityYield(h.res, b.type) : [[h.res, b.type === 'town' ? 2 : 1]];
+      for (const [card, n] of gains) demand[card][b.owner] = (demand[card][b.owner] || 0) + n;
     }
   }
   const got = {};
-  for (const r of RES) {
+  for (const r of CARDS) {
     const entries = Object.entries(demand[r]);
     if (!entries.length) continue;
     const total = entries.reduce((s, [, n]) => s + n, 0);
@@ -407,12 +444,13 @@ function produce(game, sum) {
   }
   const parts = Object.entries(got).map(([pid, c]) => `${P(game, pid).name}: ${fmtRes(c)}`);
   log(game, parts.length ? `Harvest — ${parts.join(' · ')}` : 'Nobody harvests anything.', null, { type: 'harvest', gains: got });
+  if (crowns) CR.afterHarvest(game, got);
 }
 
 // The thief points at one of the victim's face-down cards; the hand is shuffled so the pick is blind.
 function stealFrom(game, thief, victim, pickIndex) {
   const cards = [];
-  for (const r of RES) for (let i = 0; i < victim.hand[r]; i++) cards.push(r);
+  for (const r of CARDS) for (let i = 0; i < (victim.hand[r] || 0); i++) cards.push(r);
   if (!cards.length) return;
   shuffle(cards);
   const i = Number.isInteger(pickIndex) && pickIndex >= 0 && pickIndex < cards.length ? pickIndex : rint(cards.length);
@@ -442,10 +480,11 @@ function rate(game, pid, r) {
     if (h === r) return 2;
     if (h === 'any') best = 3;
   }
-  return best;
+  return CR.on(game) ? Math.min(best, CR.rate(game, pid, r)) : best;
 }
 
 function canAffordAny(p, game) {
+  if (CR.on(game) && CR.canAffordAny(game, p)) return true;
   return (hasRes(p.hand, COST.road) && p.pieces.road > 0) ||
     (hasRes(p.hand, COST.village) && p.pieces.village > 0) ||
     (hasRes(p.hand, COST.town) && p.pieces.town > 0) ||
@@ -456,6 +495,7 @@ function nextTurn(game) {
   const t = game.turn;
   t.idx = (t.idx + 1) % game.players.length;
   t.number++; t.phase = 'preroll'; t.dice = null; t.devPlayed = false;
+  if (CR.on(game)) CR.newTurn(game);
   t.builder = null; t.builderQueue = []; t.freeRoads = 0; t.victims = [];
   game.trade = null;
   log(game, `— ${current(game).name}'s turn —`);
@@ -486,7 +526,7 @@ function endTurn(game) {
 function parseCards(obj) {
   const out = emptyHand();
   if (!obj || typeof obj !== 'object') return out;
-  for (const r of RES) {
+  for (const r of CARDS) {
     const n = Number(obj[r] || 0);
     if (!Number.isInteger(n) || n < 0 || n > 99) fail('Invalid card amounts');
     out[r] = n;
@@ -498,7 +538,7 @@ function parseCards(obj) {
 
 // Gameplay moves that go into the history (chat, host hand-offs and lobby actions don't change the game).
 const RECORDED = new Set(['roll', 'discard', 'moveBandit', 'steal', 'buildVillage', 'buildTown', 'buildRoad', 'skipRoads', 'buyScroll',
-  'playScroll', 'bankTrade', 'proposeTrade', 'respondTrade', 'confirmTrade', 'cancelTrade', 'endTurn', 'builderDone', 'skip']);
+  'playScroll', 'bankTrade', 'proposeTrade', 'respondTrade', 'confirmTrade', 'cancelTrade', 'endTurn', 'builderDone', 'skip', ...CROWNS_MOVES]);
 let depth = 0; // >0 while a move is being applied, so moves the game makes for someone (auto-play) aren't recorded twice
 
 // Run fn with this game's seeded randomness, restoring whatever was active before.
@@ -560,24 +600,24 @@ function actInner(game, pid, a) {
   };
   const canBuild = () => (isCur && t.phase === 'main') || (t.phase === 'builder' && t.builder === pid);
 
+  if (CR.on(game) && CR.handles(a.type)) {
+    CR.act(game, p, a, { isCur, mustCur, canBuild });
+    checkWin(game, pid);
+    return bump(game);
+  }
+  if (CR.on(game) && (a.type === 'buyScroll' || a.type === 'playScroll')) fail('Crowns & Raiders uses edicts instead of development cards');
+
   switch (a.type) {
     case 'roll': {
       if (t.phase === 'order') { orderRoll(game, p); break; }
       mustCur('preroll');
-      const [d1, d2] = rollDice(game, pid, 'turn'); const sum = d1 + d2;
+      const [d1, d2] = rollDice(game, pid, 'turn', CR.on(game) ? CR.takeFixedDice(game) : null); const sum = d1 + d2;
       t.dice = [d1, d2]; game.rollStats[sum]++;
       (game.rollHistory = game.rollHistory || []).push({ n: sum, d: [d1, d2], by: pid, turn: t.number });
       log(game, `🎲 ${p.name} rolled ${sum} (${d1}+${d2}).`);
-      if (sum !== 7) { produce(game, sum); t.phase = 'main'; break; }
-      game.pendingDiscard = {};
-      for (const o of game.players) {
-        const c = handCount(o.hand);
-        if (c > game.settings.discardLimit) game.pendingDiscard[o.id] = Math.floor(c / 2);
-      }
-      t.afterRobber = 'main';
-      const names = Object.keys(game.pendingDiscard).map((id) => P(game, id).name);
-      if (names.length) { t.phase = 'discard'; log(game, `Bandits! ${names.join(', ')} must discard half their cards.`); }
-      else { t.phase = 'robber'; log(game, `Bandits! ${p.name} moves the bandit.`); }
+      // crowns: the event die first (raiders advance or a gate hands out edicts); a raid may need choices first
+      if (CR.on(game) && CR.rollEvent(game, p, d2, sum)) break;
+      afterRoll(game, sum);
       break;
     }
     case 'discard': {
@@ -588,11 +628,12 @@ function actInner(game, pid, a) {
       move(p.hand, game.bank, cards);
       log(game, `${p.name} discarded ${handCount(cards)} cards.`);
       delete game.pendingDiscard[pid];
-      if (!Object.keys(game.pendingDiscard).length) t.phase = 'robber';
+      if (!Object.keys(game.pendingDiscard).length) afterDiscards(game);
       break;
     }
     case 'moveBandit': {
       mustCur('robber');
+      if (CR.on(game) && !CR.banditFree(game)) fail('The bandit cannot move until the raiders first reach the island');
       const h = game.board.hexes[a.hex];
       if (!h) fail('Pick a tile');
       if (h.id === game.bandit) fail('The bandit must move to a different tile');
@@ -618,8 +659,10 @@ function actInner(game, pid, a) {
         mustCur('setup');
         if (t.setup.need !== 'village') fail('Place a road next to your settlement');
         if (!canPlaceVillage(game, pid, v, true)) fail("You can't build there (too close to another settlement?)");
-        game.buildings[v] = { owner: pid, type: 'village' }; p.pieces.village--;
-        log(game, `${p.name} placed a settlement.`);
+        const asCity = CR.on(game) && t.setup.pos >= game.players.length; // crowns: the second placement is a city
+        game.buildings[v] = { owner: pid, type: asCity ? 'town' : 'village' };
+        if (asCity) p.pieces.town--; else p.pieces.village--;
+        log(game, `${p.name} placed a ${asCity ? 'city' : 'settlement'}.`);
         if (t.setup.pos >= game.players.length) {
           const got = emptyHand();
           for (const hid of game.board.vertices[v].hexes) {
@@ -750,14 +793,14 @@ function actInner(game, pid, a) {
       mustCur('main');
       let give, get;
       if (typeof a.give === 'string') { // older single-card form: give one lot of a.give for 1 a.get
-        if (!RES.includes(a.give) || !RES.includes(a.get)) fail('Pick two different resources');
+        if (!CARDS.includes(a.give) || !CARDS.includes(a.get)) fail('Pick two different cards');
         give = emptyHand(); give[a.give] = rate(game, pid, a.give);
         get = emptyHand(); get[a.get] = 1;
       } else { give = parseCards(a.give); get = parseCards(a.get); }
       if (!handCount(give) || !handCount(get)) fail('Choose what to give and what to take');
-      if (RES.some((r) => give[r] && get[r])) fail("Don't put the same resource on both sides");
+      if (CARDS.some((r) => give[r] && get[r])) fail("Don't put the same card on both sides");
       let lots = 0;
-      for (const r of RES) {
+      for (const r of CARDS) {
         if (!give[r]) continue;
         const k = rate(game, pid, r);
         if (give[r] % k) fail(`${RES_NAME[r]} trades in groups of ${k}`);
@@ -765,7 +808,7 @@ function actInner(game, pid, a) {
       }
       if (handCount(get) !== lots) fail(`That gives you ${lots} card${lots === 1 ? '' : 's'} to take — you picked ${handCount(get)}`);
       if (!hasRes(p.hand, give)) fail("You don't have those cards");
-      for (const r of RES) if (get[r] > game.bank[r]) fail(`The bank only has ${game.bank[r]} ${RES_NAME[r]}`);
+      for (const r of CARDS) if (get[r] > (game.bank[r] || 0)) fail(`The bank only has ${game.bank[r] || 0} ${RES_NAME[r]}`);
       move(p.hand, game.bank, give); move(game.bank, p.hand, get);
       log(game, `🏦 ${p.name} traded ${fmtRes(give)} to the bank for ${fmtRes(get)}.`);
       break;
@@ -774,7 +817,7 @@ function actInner(game, pid, a) {
       mustCur('main');
       const give = parseCards(a.give); const get = parseCards(a.get);
       if (!handCount(give) || !handCount(get)) fail('A trade needs cards on both sides');
-      if (RES.some((r) => give[r] && get[r])) fail("Don't put the same resource on both sides");
+      if (CARDS.some((r) => give[r] && get[r])) fail("Don't put the same card on both sides");
       if (!hasRes(p.hand, give)) fail("You don't have the cards you're offering");
       game.trade = { id: rid(4), from: pid, give, get, responses: {}, counters: {} };
       log(game, `🤝 ${p.name} offers ${fmtRes(give)} for ${fmtRes(get)}.`);
@@ -789,7 +832,7 @@ function actInner(game, pid, a) {
         // counter terms from the responder's side: what they give / what they want
         const give = parseCards(a.counter.give); const get = parseCards(a.counter.get);
         if (!handCount(give) || !handCount(get)) fail('A counter-offer needs cards on both sides');
-        if (RES.some((r) => give[r] && get[r])) fail("Don't put the same resource on both sides");
+        if (CARDS.some((r) => give[r] && get[r])) fail("Don't put the same card on both sides");
         if (!hasRes(p.hand, give)) fail("You don't have the cards you're offering");
         tr.counters[pid] = { give, get }; tr.responses[pid] = 'counter';
         log(game, `🤝 ${p.name} counters: ${fmtRes(give)} for ${fmtRes(get)}.`);
@@ -849,6 +892,7 @@ function stalledPlayers(game) {
   const t = game.turn;
   if (t.phase === 'order') return game.order.contenders.filter((id) => game.order.rolls[id] === undefined);
   if (t.phase === 'discard') return Object.keys(game.pendingDiscard);
+  if (t.phase === 'raid' && game.cr) return Object.keys(game.cr.pendingRaid);
   if (t.phase === 'builder') return [t.builder];
   return [current(game).id];
 }
@@ -861,13 +905,14 @@ function autoPlay(game) {
       for (const [id, n] of Object.entries(game.pendingDiscard)) {
         const o = P(game, id);
         for (let i = 0; i < n; i++) {
-          const have = RES.filter((r) => o.hand[r] > 0);
+          const have = CARDS.filter((r) => o.hand[r] > 0);
           const r = have[rint(have.length)]; o.hand[r]--; game.bank[r]++;
         }
       }
-      game.pendingDiscard = {}; t.phase = 'robber';
+      game.pendingDiscard = {}; afterDiscards(game);
       return;
     case 'builder': return advanceBuilder(game);
+    case 'raid': return CR.autoRaid(game);
     case 'preroll': return act(game, cur.id, { type: 'roll' });
     case 'order': for (const id of stalledPlayers(game)) orderRoll(game, P(game, id)); return;
     case 'robber': {
@@ -967,6 +1012,10 @@ function lobbyAction(game, p, a) {
 function cleanSettings(s) {
   s = s || {};
   const out = {};
+  if (['classic', 'crowns'].includes(s.mode)) {
+    out.mode = s.mode;
+    if (s.vpTarget === undefined) out.vpTarget = s.mode === 'crowns' ? 13 : 10; // each mode's usual target
+  }
   if (s.vpTarget !== undefined) out.vpTarget = Math.max(5, Math.min(20, Math.round(Number(s.vpTarget)) || 10));
   if (s.discardLimit !== undefined) out.discardLimit = Math.max(5, Math.min(12, Math.round(Number(s.discardLimit)) || 7));
   if (s.builderPhase !== undefined) out.builderPhase = !!s.builderPhase;
@@ -977,6 +1026,7 @@ function cleanSettings(s) {
 }
 
 const SETTING_LABEL = {
+  mode: (v) => (v === 'crowns' ? 'Crowns & Raiders mode' : 'classic mode'),
   vpTarget: (v) => `points to win ${v}`,
   boardSize: (v) => `island ${v}`,
   discardLimit: (v) => `hand limit ${v}`,
@@ -1005,6 +1055,7 @@ function phaseHint(phase) {
     setup: 'Finish placing your starting pieces',
     preroll: 'Roll the dice first',
     discard: 'Waiting for players to discard',
+    raid: 'Waiting for players to choose which city the raiders sack',
     robber: 'Move the bandit first',
     steal: 'Choose who to steal from first',
     roadbuilding: 'Place your free roads first',
@@ -1075,11 +1126,13 @@ function viewFor(game, pid) {
     id: p.id, name: p.name, color: p.color, connected: p.connected,
     cards: handCount(p.hand), scrolls: p.scrolls.length, guards: p.guards, roadLen: p.roadLen,
     pieces: p.pieces, vp: vp(game, p, false),
+    ...(CR.on(game) ? { cr: CR.publicPlayer(game, p) } : {}),
     vpTotal: p.id === pid || over ? vp(game, p, true) : null,
     hand: over ? p.hand : undefined,
     longest: game.longestHolder === p.id, army: game.armyHolder === p.id,
   }));
-  const hints = { villages: [], roads: [], towns: [], hexes: [] };
+  const hints = { villages: [], roads: [], towns: [], hexes: [], ...(CR.on(game) ? { wardenSpots: [], wallSpots: [], raidCities: [], capitalCities: [], myWardens: [] } : {}) };
+  if (me && CR.on(game) && game.status === 'playing') Object.assign(hints, CR.hints(game, pid));
   if (me && game.status === 'playing') {
     const myTurn = cur.id === pid;
     if (t.phase === 'robber' && myTurn) hints.hexes = banditHexes(game, pid);
@@ -1102,7 +1155,7 @@ function viewFor(game, pid) {
     rollStats: game.rollStats, rollHistory: game.rollHistory || [], produced: game.produced || {}, cost: COST, scrollNames: SCROLL_NAME,
     turn: {
       idx: t.idx, number: t.number, phase: t.phase, current: cur.id, dice: t.dice, devPlayed: t.devPlayed,
-      freeRoads: t.freeRoads, victims: t.victims, builder: t.builder,
+      freeRoads: t.freeRoads, victims: t.victims, builder: t.builder, event: t.event || null,
       setupNeed: t.phase === 'setup' ? t.setup.need : null,
       setupRound: t.phase === 'setup' ? (t.setup.pos < game.players.length ? 1 : 2) : null,
     },
@@ -1117,10 +1170,14 @@ function viewFor(game, pid) {
     deadlineTotal: game.deadline ? game.deadlineTotal || null : null,
     hand: me ? me.hand : null,
     myScrolls: me ? me.scrolls.map((s) => ({ type: s.type, fresh: s.bought >= t.number })) : [],
-    rates: me ? Object.fromEntries(RES.map((r) => [r, rate(game, pid, r)])) : null,
+    rates: me ? Object.fromEntries(CARDS.map((r) => [r, rate(game, pid, r)])) : null,
     hints,
+    ...(CR.on(game) ? { crowns: CR.view(game, pid, hints) } : {}),
   };
 }
 
-module.exports = { createGame, addPlayer, act, viewFor, setConnected, tick, timeout, reseed, newSeed, historyStart, RES, COST, MAX_PLAYERS, PIECES, COLORS,
+CR.bind({ log, P, fail, rint, shuffle, handCount, hasRes, move, fmtRes, emptyHand, current, updateLongest, stealFrom, banditHexes,
+  afterRoll, canPlaceVillage, canPlaceRoad, validRoads, vp, RES, CARDS, RES_NAME, COST, PIECES });
+
+module.exports = { createGame, addPlayer, act, viewFor, setConnected, tick, timeout, reseed, newSeed, historyStart, RES, COM, CARDS, COST, MAX_PLAYERS, PIECES, COLORS,
   _internal: { roadLength, buildBoard, boardConfig, canPlaceRoad, canPlaceVillage, validRoads, handCount, withRng, autoPlay, bump } };

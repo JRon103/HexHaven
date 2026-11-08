@@ -4,13 +4,14 @@
 // Shared by the server and the browser's replay viewer.
 const crypto = require('crypto');
 const G = require('./game');
+const CR = require('./crowns');
 const { RES, TILE, TILE_BACK, geometry, cards, uncards, decodeMove } = require('./notation');
 
 const FORMAT = 1;
 const ABOUT = 'Hexhaven save file. Seats are permanent numbers (seat 1 = first player listed); "turnOrder" is the order they play in. '
   + 'Tiles are listed row by row, top to bottom: Wo wood, Cl clay, Fl fleece, Wh wheat, Ir iron, De dunes, followed by the dice number. '
   + 'Positions are "row.tile" counted from 1, plus a corner (N NE SE S SW NW) or a side (NE E SE SW W NW), e.g. "3.2SE". '
-  + 'Cards are written like "Wo1 Cl2 Wh3". A development card ending in * was bought this turn. '
+  + 'Cards are written like "Wo1 Cl2 Wh3" (Crowns & Raiders adds Pa parchment, Li linen, Si silver). A development card ending in * was bought this turn. '
   + 'Leave "seed" empty ("") to get fresh random dice; keep it to roll exactly the same dice again. '
   + 'Editing the snapshot is fine: the history then no longer matches, and the game continues from your edited version.';
 const TILE_ROWS = { 2: [3, 4, 5, 4, 3], 3: [4, 5, 6, 7, 6, 5, 4] };
@@ -61,7 +62,91 @@ function encodeSnapshot(game) {
     harvested: seatMap(game.produced),
     winner: seatOf(game.winner),
   };
+  if (game.cr) {
+    const t2 = game.turn;
+    snap.turn = { ...snap.turn, ...(t2.event ? { event: t2.event } : {}) };
+    snap.crowns = encodeCrowns(game, geo, seatOf, bySeat);
+  }
   return snap;
+}
+
+// Crowns & Raiders: everything the mode adds, written per seat with board positions.
+// A warden is "3.2SE rank 2 active" plus the turns it was built / activated / promoted (rules limit those per turn).
+function encodeCrowns(game, geo, seatOf, bySeat) {
+  const cr = game.cr;
+  const per = {};
+  for (const p of bySeat) {
+    per[p.seat] = {
+      improvements: { ...p.cr.improve }, edicts: p.cr.edicts.map((e) => `${e.type}@${e.got}`),
+      defender: p.cr.defender, edictPoints: p.cr.edictVP, freePicks: p.cr.freePicks, edictPicks: p.cr.edictPicks,
+      walls: [], wardens: [],
+    };
+  }
+  for (const [v, o] of Object.entries(cr.walls)) per[seatOf(o)].walls.push(geo.corner(Number(v)));
+  for (const [v, w] of Object.entries(cr.wardens)) {
+    per[seatOf(w.owner)].wardens.push({ at: geo.corner(Number(v)), rank: w.level, active: !!w.active,
+      built: w.builtTurn ?? null, activated: w.activatedTurn ?? null, promoted: w.promotedTurn ?? null });
+  }
+  for (const k in per) { per[k].walls.sort(); per[k].wardens.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)); }
+  return {
+    raiders: cr.raiders, raids: cr.raids, lastEvent: cr.lastEvent,
+    capitals: Object.fromEntries(CR.TRACKS.map((k) => [k, cr.capitals[k] === null ? null : geo.corner(cr.capitals[k])])),
+    merchant: cr.merchant ? { tile: geo.tile(cr.merchant.hex), owner: seatOf(cr.merchant.owner) } : null,
+    decks: Object.fromEntries(CR.TRACKS.map((k) => [k, cr.decks[k].join(' ')])),
+    players: per,
+    pendingRaid: Object.keys(cr.pendingRaid).map(seatOf), afterRaid: cr.afterRaid,
+    fixedDice: cr.fixedDice, fleet: cr.fleet ? { seat: seatOf(cr.fleet.pid), card: cr.fleet.card } : null, mason: cr.mason,
+  };
+}
+
+function decodeCrowns(game, c, geo, idOf) {
+  if (!c || typeof c !== 'object') fail('A Crowns & Raiders save needs its "crowns" section');
+  const cr = { raiders: Number(c.raiders) || 0, raids: Number(c.raids) || 0, wardens: {}, walls: {},
+    capitals: { guild: null, council: null, academy: null }, decks: {}, merchant: null, lastEvent: c.lastEvent || null,
+    pendingRaid: {}, afterRaid: c.afterRaid ?? null, fixedDice: Array.isArray(c.fixedDice) ? c.fixedDice.map(Number) : null,
+    fleet: c.fleet ? { pid: idOf(c.fleet.seat), card: c.fleet.card } : null, mason: Number(c.mason) || 0 };
+  for (const k of CR.TRACKS) {
+    cr.decks[k] = String((c.decks && c.decks[k]) || '').trim().split(/\s+/).filter(Boolean);
+    for (const e of cr.decks[k]) if (!CR.EDICTS[e] || CR.EDICTS[e].deck !== k) fail(`The ${k} deck has an unknown edict "${e}"`);
+    const cap = c.capitals && c.capitals[k];
+    if (cap) cr.capitals[k] = geo.cornerId(cap);
+  }
+  if (c.merchant) cr.merchant = { hex: geo.tileId(c.merchant.tile), owner: idOf(c.merchant.owner) };
+  for (const s of c.pendingRaid || []) cr.pendingRaid[idOf(s)] = 1;
+  for (const p of game.players) {
+    const d = (c.players && c.players[p.seat]) || {};
+    const imp = d.improvements || {};
+    p.cr = { improve: {}, edicts: [], defender: Number(d.defender) || 0, edictVP: Number(d.edictPoints) || 0,
+      freePicks: Number(d.freePicks) || 0, edictPicks: Number(d.edictPicks) || 0, wardenPieces: { 1: 2, 2: 2, 3: 2 }, wallPieces: 3 };
+    for (const k of CR.TRACKS) {
+      const n = Number(imp[k]) || 0;
+      if (!Number.isInteger(n) || n < 0 || n > 5) fail(`Seat ${p.seat}: improvement levels go from 0 to 5`);
+      p.cr.improve[k] = n;
+    }
+    p.cr.edicts = (d.edicts || []).map((x) => {
+      const [type, got] = String(x).split('@');
+      if (!CR.EDICTS[type]) fail(`Seat ${p.seat}: unknown edict "${type}"`);
+      return { type, got: got === undefined ? -1 : Number(got) };
+    });
+    for (const at of d.walls || []) {
+      const v = geo.cornerId(at); const b = game.buildings[v];
+      if (!b || b.owner !== p.id || b.type !== 'town') fail(`Seat ${p.seat}: the wall at ${at} needs one of their cities`);
+      cr.walls[v] = p.id; p.cr.wallPieces--;
+    }
+    if (p.cr.wallPieces < 0) fail(`Seat ${p.seat} has more than 3 walls`);
+    for (const w of d.wardens || []) {
+      const v = geo.cornerId(w.at); const rank = Number(w.rank);
+      if (![1, 2, 3].includes(rank)) fail(`Seat ${p.seat}: warden ranks are 1, 2 or 3`);
+      if (game.buildings[v] || cr.wardens[v]) fail(`The warden at ${w.at} shares its corner with another piece`);
+      const o = { owner: p.id, level: rank, active: !!w.active };
+      if (w.built !== null && w.built !== undefined) o.builtTurn = Number(w.built);
+      if (w.activated !== null && w.activated !== undefined) o.activatedTurn = Number(w.activated);
+      if (w.promoted !== null && w.promoted !== undefined) o.promotedTurn = Number(w.promoted);
+      cr.wardens[v] = o; p.cr.wardenPieces[rank]--;
+      if (p.cr.wardenPieces[rank] < 0) fail(`Seat ${p.seat} has more than 2 wardens of rank ${rank}`);
+    }
+  }
+  game.cr = cr;
 }
 
 // ---------- readable snapshot → game (with friendly errors for hand edits) ----------
@@ -154,7 +239,7 @@ function decodeSnapshot(snap, code = 'SAVE') {
     put(pc.roads, (a) => { game.roads[geo.sideId(a)] = pid; p.pieces.road--; });
     if (p.pieces.village < 0 || p.pieces.town < 0 || p.pieces.road < 0) fail(`Seat ${s} has more pieces than the game allows (5 settlements, 4 cities, 15 roads)`);
   }
-  const phases = ['order', 'setup', 'preroll', 'discard', 'robber', 'steal', 'roadbuilding', 'main', 'builder'];
+  const phases = ['order', 'setup', 'preroll', 'raid', 'discard', 'robber', 'steal', 'roadbuilding', 'main', 'builder'];
   const phase = phases.includes(T.phase) ? T.phase : 'preroll';
   const idx = Math.max(0, ordered.findIndex((p) => p.seat === Number(T.player)));
   game.turn = {
@@ -163,6 +248,9 @@ function decodeSnapshot(snap, code = 'SAVE') {
     freeRoads: Number(T.freeRoads) || 0, afterRoads: T.afterRoads || null, victims: (T.victims || []).map(idOf), afterRobber: T.afterRobber || null,
     builder: idOf(T.builder), builderQueue: (T.builderQueue || []).map(idOf),
   };
+  if (T.event) game.turn.event = T.event;
+  if (game.settings.mode === 'crowns') decodeCrowns(game, snap.crowns, geo, idOf);
+  else { delete game.cr; for (const p of ordered) delete p.cr; }
   if (phase === 'order') {
     const ro = snap.rollOff || {};
     game.order = { contenders: (ro.waiting || ordered.map((p) => p.seat)).map(idOf), rolls: Object.fromEntries(Object.entries(ro.rolls || {}).map(([s, n]) => [idOf(s), Number(n)])), round: Number(ro.round) || 1 };

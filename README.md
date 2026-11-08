@@ -1,6 +1,6 @@
 # Hexhaven
 
-A browser game for 2–8 friends about settling a hex island and trading resources. You roll dice, collect resources, build roads, settlements and cities, trade, and race to 10 points.
+A browser game for 2–8 friends about settling a hex island and trading resources. You roll dice, collect resources, build roads, settlements and cities, trade, and race to 10 points. A second mode, **Crowns & Raiders**, adds city improvements, wardens and raids (see below).
 
 No install step: it needs only Node.js 18+ and has zero dependencies.
 
@@ -60,9 +60,30 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Rolling a 7:** anyone holding more than 7 cards discards half. The roller moves the bandit, which blocks that tile, and steals a card from a player who has a building there.
 - **Development cards** (each shows its rules text in the game): Guard (move the bandit), Road Crew (2 free roads), Bounty (take any 2), Embargo (collect one resource from everyone), Monument (+1 hidden point). You can play one per turn, but not on the turn you bought it.
 - **Awards:** Grand Route (longest road of 5+, +2) and Strongest Watch (3+ Guards, +2).
-- **Big games:** with 5+ players the island grows to 37 tiles, with a bigger bank and development-card deck. The **builder phase** (on by default) lets everyone else build between turns.
+- **Big games:** with 5+ players the island grows to 37 tiles, with a bigger bank and development-card deck. The optional **builder phase** (off by default; turn it on in the lobby) lets everyone else build between turns.
 - **Trading:** the active player makes an offer, which pops up in the top-left corner of everyone's board. Others can accept, decline or send a **counter-offer**, and the offerer picks one.
 - **Bank trades** use the same give/want pickers. Each + on the give side adds a full lot at your rate (4, or 3/2 at a harbor ⚓), and every lot buys one card of your choice; several lots can go in one trade.
+
+## Crowns & Raiders
+
+Pick it under **Game mode** in the lobby. It works with 2–8 players, plays to 13 points, and replaces development cards with the rules below. The ℹ️ button in the game lists every rule and edict.
+
+- **Commodities.** A city next to forest, pasture or mountains takes 1 resource + 1 commodity (📃 parchment, 🧵 linen, 🪙 silver) instead of 2 resources.
+- **City improvements.** There are three tracks, each with levels 1–5 paid with one commodity: ⚖️ Guild (linen), 📯 Council (silver) and 🔭 Academy (parchment). Level *n* costs *n* cards. Level 3 unlocks a power:
+  - Trading Hall: commodities trade 2:1.
+  - Citadel: wardens can become Champions.
+  - Waterworks: take any resource when a roll gives you nothing.
+- **Capitals.** The first to reach level 4 in a track gets that track's capital (+2, safe from raids). The first to reach level 5 takes it over.
+- **The event die.** A third die is thrown with every roll, and the second number die is red.
+  - ⛵ moves the raiders' ship one step.
+  - A gate gives an **edict** from that deck to everyone whose level in the track covers the red die.
+- **Raids.** When the ship arrives (7 steps), the raiders fight with one point per city on the island. Your defense is the total rank of all active wardens. If the wardens win, the strongest player becomes Defender of the Isle (+1). If the raiders win, the players with the weakest wardens each lose a city (it turns back into a settlement). The bandit stays in the dunes until the first raid.
+- **Wardens** cost 🐑⛏️ and stand on corners along your roads. Activate them with 🌾. Active wardens can move, push a weaker opponent warden away, or chase the bandit off. Promote them with 🐑⛏️ up to rank 3.
+- **Walls** cost 🧱🧱 and add +2 to your hand limit.
+- **Setup:** your second piece is a city.
+- **Edicts:** 3 decks of 18 cards, each with its rules text in the game. Point edicts count at once.
+
+The **raiders' track** in the sidebar shows how close the ship is and whether the island would hold right now. Saves, loading and replays work in this mode too: the save file gains a `crowns` section with improvements, wardens, walls, capitals, the merchant, edicts and the decks. Commodities are written `Pa`, `Li` and `Si`.
 
 ## Quality of life
 
@@ -78,7 +99,7 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 - **Rolling a 7:** the dice turn red, the board flashes, and a red banner stays up until discards, the bandit move and the steal are done. When discarding you can only pick exactly the number of cards you owe.
 - **Robbing:** after moving the bandit you pick one of the victim's face-down cards. It flips over to show what you took, and only you and the victim see what it was.
 - Every roll shows two 3D dice thrown onto the board. Animations are on by default; the ✨ button in the top bar turns them off (or back on) for that device. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
-- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card · `Esc` cancel.
+- **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card (in Crowns & Raiders `4` wall, `5` warden) · `Esc` cancel.
 
 ## Saving, loading and replays
 
@@ -120,6 +141,8 @@ A save is a readable JSON file (about 1 KB per 10 turns). It has two parts: a **
 - `public/`: browser client (board drawn as SVG).
 - `notation.js`: readable names for positions, cards and moves (shared with the browser).
 - `save.js`: save files: snapshot + history, loading (with friendly errors), and the replayer.
+- `crowns.js`: the Crowns & Raiders rules. `game.js` calls into it at its hook points. `public/crowns-ui.js` is its browser side.
 - `test/sim.js`: headless bot self-play with invariant checks (`npm test`).
 - `test/save-test.js`: save, load, replay and hand-edit checks on bot games.
+- `test/crowns-sim.js` / `test/crowns-save-test.js`: the same for Crowns & Raiders, with bots that use every action and edict.
 - `test/bots.js`: fills a live room with bots for testing (`node test/bots.js ROOMCODE 5`).

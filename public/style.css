@@ -484,3 +484,68 @@ html.reduce-motion :is(.timer.low, .timerbar.low > div) { animation: none; }
 .rp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .pl-hand { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; padding-top: 2px; }
 .pl-hand span { display: inline-flex; gap: 2px; align-items: center; }
+
+/* ---------- Crowns & Raiders ---------- */
+.mode-field { grid-column: 1 / -1; }
+/* raiders' track over the board, bottom right */
+.cr-track { display: grid; gap: 5px; font-size: 13px; }
+.crt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.crt-steps { display: flex; gap: 3px; align-items: center; }
+.crt-step { flex: 1; height: 22px; border-radius: 6px; background: #d9ecef; border: 1px solid #9cc7cf; display: grid; place-items: center; font-size: 14px; }
+.crt-step.past { background: #9fc9d3; }
+.crt-step.isle { background: #f0dfb4; border-color: #c7a868; }
+.crt-start { font-size: 14px; margin-right: 2px; }
+.crt-vs { font-weight: 700; padding: 3px 8px; border-radius: 8px; }
+.crt-vs.good { background: #dff1e4; color: #1d6b3b; }
+.crt-vs.bad { background: #f8dcd8; color: #9a2318; }
+@media (prefers-color-scheme: dark) { .crt-vs.good { background: #1e3a28; color: #9fe0b4; } .crt-vs.bad { background: #47201c; color: #f3b1a9; } .crt-step { background: #24414a; border-color: #36606c; } .crt-step.past { background: #2f6b7c; } .crt-step.isle { background: #5a4a26; } }
+.crt-note { font-size: 12px; color: var(--muted); }
+.seven-banner.raid { background: #3a2a6b; }
+/* event die */
+.die3d.red .cube .face { background: linear-gradient(145deg, #e0493c, #b52b21); }
+.die3d.event .cube .face { padding: 0; }
+.evface { width: 100%; height: 100%; display: grid; place-items: center; font-size: 34px; background: var(--ec); }
+.ev-tag { margin-left: 6px; font-weight: 600; opacity: .9; }
+/* board pieces */
+.warden.mine { cursor: pointer; }
+.warden.mine:hover path { filter: brightness(1.15); }
+.warden.idle { opacity: .78; }
+.warden-glow { fill: rgba(255, 210, 58, .35); stroke: #ffd23a; stroke-width: 1.5; animation: blink 1.6s infinite; pointer-events: none; }
+html.reduce-motion .warden-glow { animation: none; }
+.hex-pick { fill: rgba(255, 224, 138, .18); stroke: #ffe08a; stroke-width: 3; stroke-dasharray: 6 4; }
+.hex-pick:hover { fill: rgba(255, 224, 138, .4); }
+.hint-e.pick { stroke: #ffe08a; }
+/* dock: improvements, wardens, edicts */
+.crpanel { flex: 1 1 100%; display: grid; gap: 8px; }
+.cr-tracks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.track { border: 2px solid var(--tc); border-radius: 12px; padding: 7px 9px; background: linear-gradient(color-mix(in srgb, var(--tc) 12%, var(--panel)), var(--panel)); display: grid; gap: 4px; align-content: start; }
+.tr-head { display: flex; gap: 6px; align-items: center; }
+.tr-ico { font-size: 18px; }
+.tr-lv { margin-left: auto; font-weight: 800; background: var(--tc); color: #fff; border-radius: 99px; padding: 0 8px; font-size: 12.5px; }
+.tr-cap { font-size: 12px; font-weight: 800; }
+.tr-pips { display: flex; gap: 3px; }
+.tr-pips .lv { flex: 1; height: 8px; border-radius: 4px; background: var(--line); }
+.tr-pips .lv.on { background: var(--tc); }
+.tr-pips .lv.power { box-shadow: 0 0 0 1.5px var(--tc) inset; }
+.tr-power { font-size: 12.5px; color: var(--muted); }
+.tr-power.on { color: var(--ink); font-weight: 700; }
+.tr-reach { font-size: 11.5px; }
+.track .btn .cost { display: inline-flex; gap: 1px; }
+.track .btn .cost .c { font-size: 14px; }
+.track .btn .cost .c.have { background: transparent; box-shadow: none; }
+.track .btn .cost .c.miss { opacity: .4; filter: grayscale(1); }
+.cr-wardens { font-size: 13.5px; }
+.devcard.edict { border-color: var(--tc); background: linear-gradient(color-mix(in srgb, var(--tc) 14%, #fffaf0), #f6ecd6); }
+.devcard.edict.big { width: auto; }
+.wact { display: grid; gap: 6px; }
+.wact .btn { justify-content: flex-start; }
+.wact .btn .cost { display: inline-flex; gap: 1px; margin-left: auto; }
+.dicepick { display: grid; gap: 8px; }
+.dp-row { display: flex; gap: 5px; margin-top: 3px; }
+.dp { border: 2px solid transparent; background: none; padding: 1px; border-radius: 10px; cursor: pointer; }
+.dp svg { width: 36px; height: 36px; display: block; }
+.dp.on { border-color: var(--accent); }
+.cr-rules { margin: 4px 0; padding-left: 18px; display: grid; gap: 5px; font-size: 14px; }
+@media (max-width: 900px) { .cr-tracks { grid-template-columns: 1fr; } }
+/* the dock never squeezes the board: past 45% of the screen it scrolls (Crowns & Raiders has a taller dock) */
+@media (min-width: 901px) { .dock { max-height: 45vh; overflow-y: auto; } }
