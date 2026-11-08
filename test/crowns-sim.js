@@ -115,7 +115,7 @@ for (let i = 0; i < GAMES; i++) {
   const n = ONLY_N || 2 + (i % 7);
   const g = G.createGame('C' + i);
   const ps = Array.from({ length: n }, (_, k) => G.addPlayer(g, 'Bot' + k));
-  G.act(g, ps[0].id, { type: 'settings', settings: { mode: 'crowns', builderPhase: i % 3 === 0, turnTimer: i % 4 === 1 ? 60 : 0 } });
+  G.act(g, ps[0].id, { type: 'settings', settings: { mode: 'crowns', builderPhase: i % 3 === 0, turnTimer: i % 4 === 1 ? 60 : 0, firstRaid: [7, 10, 14, 21][i % 4] } });
   if (g.settings.vpTarget !== 13) throw new Error('crowns should default to 13 points');
   G.act(g, ps[0].id, { type: 'start' });
   const supply = Object.fromEntries(CARDS.map((r) => [r, g.bank[r]]));

@@ -462,3 +462,58 @@ function crBindModal(v, root, kind) {
     };
   });
 }
+
+// ---------- the raid: a big moment over the board ----------
+// The ship lands, raiders and wardens count up side by side, then the outcome: who defended the isle or who loses a city.
+function crShowRaid(v, r) {
+  const fx = $('#fx'); const wrap = $('#boardwrap');
+  if (!fx || !r) return;
+  fx.querySelectorAll('.raidfx').forEach((e) => e.remove());
+  const nm = (id) => esc(pname(v, id));
+  const names = (ids) => ids.map(nm).join(', ');
+  let title; let sub; let cls;
+  if (r.outcome === 'hold') {
+    cls = 'hold'; title = '🛡️ The island holds!';
+    sub = r.defender ? (r.defender === v.me ? 'You are <b>Defender of the Isle</b> (+1 point)' : `<b>${nm(r.defender)}</b> is Defender of the Isle (+1 point)`)
+      : `${names(r.shared)} share the honor and each draw an edict`;
+  } else if (r.outcome === 'fall') {
+    cls = 'fall'; title = '🔥 The raiders win!';
+    const mine = r.losers.includes(v.me);
+    sub = mine ? `You lose a city${r.choosing.includes(v.me) ? ' — click which one on the board' : ''}${r.losers.length > 1 ? `, and so do ${names(r.losers.filter((x) => x !== v.me))}` : ''}`
+      : `${names(r.losers)} ${r.losers.length > 1 ? 'each lose' : 'loses'} a city (the weakest defense)`;
+  } else if (r.outcome === 'capitals') { cls = 'fall'; title = '🔥 The raiders win…'; sub = 'but every city left is a protected capital'; }
+  else { cls = 'hold'; title = '⛵ The raiders land…'; sub = 'and find no cities to plunder'; }
+  const ranked = v.players.slice().sort((a, b) => (r.strength[b.id] || 0) - (r.strength[a.id] || 0));
+  const el = document.createElement('div');
+  el.className = 'raidfx ' + cls;
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<div class="rf-head">⚔️ The raiders land! <span class="hint">raid ${r.id}</span></div>
+    <div class="rf-vs">
+      <div class="rf-side bad"><div class="rf-n" data-to="${r.attack}">0</div><div class="rf-l">⛵ Raiders<br><span>one per city</span></div></div>
+      <div class="rf-mid">vs</div>
+      <div class="rf-side good"><div class="rf-n" data-to="${r.defense}">0</div><div class="rf-l">🛡️ Wardens<br><span>active ranks</span></div></div>
+    </div>
+    <div class="rf-players">${ranked.map((p) => `<span class="rf-p ${p.id === r.defender ? 'def' : ''} ${r.losers.includes(p.id) ? 'lost' : ''}" style="--pc:${PC[p.color]}">${chip(p.color)}${esc(p.name)} <b>${r.strength[p.id] || 0}</b></span>`).join('')}</div>
+    <div class="rf-out"><div class="rf-title">${title}</div><div class="rf-sub">${sub}</div></div>
+    <div class="rf-hint">click to close</div>`;
+  el.onclick = () => el.remove();
+  fx.appendChild(el);
+  const reduce = !motionOn();
+  chime('drum');
+  // count the two sides up
+  const nums = [...el.querySelectorAll('.rf-n')];
+  const t0 = performance.now(); const dur = reduce ? 0 : 900;
+  const step = (now) => {
+    const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+    nums.forEach((n) => { n.textContent = Math.round(Number(n.dataset.to) * k); });
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  setTimeout(() => {
+    el.classList.add('done');
+    chime(cls === 'fall' ? 'raidfall' : 'raidhold');
+    if (wrap) { const f = document.createElement('div'); f.className = 'raid-flash ' + cls; wrap.appendChild(f); setTimeout(() => f.remove(), 1600); }
+  }, dur + 150);
+  setTimeout(() => el.classList.add('out'), dur + 6500);
+  setTimeout(() => el.remove(), dur + 7000);
+}

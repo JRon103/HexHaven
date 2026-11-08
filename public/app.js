@@ -268,7 +268,8 @@ function chime(kind) {
   if (!soundOn() || S.replay) return;
   try {
     const ctx = S.audio || (S.audio = new (window.AudioContext || window.webkitAudioContext)());
-    const notes = kind === 'trade' ? [660, 880] : kind === 'seven' ? [392, 311, 233] : [523, 659, 784];
+    const notes = kind === 'trade' ? [660, 880] : kind === 'seven' ? [392, 311, 233] : kind === 'raidfall' ? [262, 208, 165, 131]
+      : kind === 'raidhold' ? [523, 659, 784, 1047] : kind === 'drum' ? [98, 98, 131] : [523, 659, 784];
     notes.forEach((f, i) => {
       const o = ctx.createOscillator(); const g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = f;
@@ -289,6 +290,7 @@ function noticeChanges(v) {
       ...(v.crowns ? Object.keys(v.crowns.wardens).map((k) => 'w' + k) : [])]),
     roll: v.lastRoll ? v.lastRoll.id : 0,
     steal: v.lastSteal ? v.lastSteal.id : 0,
+    raid: v.crowns && v.crowns.lastRaid ? v.crowns.lastRaid.id : 0,
     bandit: v.bandit,
     logId: v.log.length ? v.log[v.log.length - 1].id : 0,
     // whose go it is: a new player's turn, a new setup placement, or a new builder-phase player
@@ -306,6 +308,7 @@ function noticeChanges(v) {
   if (cur.turnKey && cur.turnKey !== prev.turnKey) showTurn(v);
   if (cur.roll !== prev.roll && v.lastRoll) showDice(v, v.lastRoll);
   if (stole) showSteal(v, v.lastSteal);
+  if (cur.raid && cur.raid !== prev.raid) { const r = v.crowns.lastRaid; setTimeout(() => crShowRaid(S.v || v, r), cur.roll !== prev.roll && motionOn() ? THROW_MS + 500 : 0); }
   if (cur.bandit !== prev.bandit && prev.bandit !== undefined) S.banditMove = { from: prev.bandit, at: now };
   if (cur.hand && prev.hand && !stole) {
     const gained = ALLC.filter((r) => cur.hand[r] > prev.hand[r]).map((r) => RM[r].ico.repeat(cur.hand[r] - prev.hand[r])).join(' ');
@@ -497,6 +500,10 @@ function renderLobby(v) {
         <span class="hint" style="font-weight:400">${val('mode') === 'crowns'
           ? 'Cities also make commodities (📃 parchment, 🧵 linen, 🪙 silver) that buy city improvements. Raise wardens to fight off the raiders\' ship, or lose a city. A third die opens the Guild, Council and Academy gates and deals edicts. No development cards. Your second setup piece is a city. 2–8 players.'
           : 'The standard game: roads, settlements, cities and development cards. 2–8 players.'}</span></label>
+      ${val('mode') === 'crowns' ? `<label class="field${chg('firstRaid')}">First raid
+        <select id="s-raid">${[[7, 'After 7 ship steps — standard'], [10, 'After 10 steps — a little more time'], [14, 'After 14 steps — about twice as long'], [21, 'After 21 steps — a slow start']].map(([n, label]) =>
+          `<option value="${n}" ${(val('firstRaid') || 7) === n ? 'selected' : ''}>${label}</option>`).join('')}</select>
+        <span class="hint" style="font-weight:400">How far the raiders' ship sails before it first lands, so everyone has time to raise wardens. Later raids always come after 7 steps.</span></label>` : ''}
       <label class="field${chg('vpTarget')}">Points to win
         <input type="number" min="5" max="20" id="s-vp" value="${val('vpTarget')}"></label>
       <label class="field${chg('boardSize')}">Island size
@@ -539,6 +546,7 @@ function renderLobby(v) {
       renderLobby(S.v);
     };
     $('#s-mode').onchange = (e) => upd({ mode: e.target.value, vpTarget: e.target.value === 'crowns' ? 13 : 10 });
+    if ($('#s-raid')) $('#s-raid').onchange = (e) => upd({ firstRaid: Number(e.target.value) });
     $('#s-vp').onchange = (e) => upd({ vpTarget: Math.max(5, Math.min(20, Math.round(Number(e.target.value)) || 10)) });
     $('#s-discard').onchange = (e) => upd({ discardLimit: Math.max(5, Math.min(12, Math.round(Number(e.target.value)) || 7)) });
     $('#s-size').onchange = (e) => upd({ boardSize: e.target.value });
@@ -565,6 +573,7 @@ function renderLobby(v) {
 // ---------- settings suggestions ----------
 const SETTING_TEXT = {
   mode: ['Mode', (x) => (x === 'crowns' ? 'Crowns & Raiders' : 'Classic')],
+  firstRaid: ['First raid after', (x) => `${x || 7} steps`],
   vpTarget: ['Points to win', (x) => x],
   boardSize: ['Island', (x) => x],
   discardLimit: ['Hand limit', (x) => x],
@@ -711,7 +720,7 @@ function renderGame(v) {
       <div class="dock" id="dock"></div>
       <aside class="side">
         <section id="cr-sec" hidden><h3>⛵ Raiders <span class="hint" id="cr-count"></span></h3><div class="cr-track" id="cr-track"></div></section>
-        <section><h3>Players <span class="hint" id="vp-target"></span></h3><div class="players" id="players"></div></section>
+        <section><h3>Players <span class="hint" id="vp-target"></span><button class="btn small" id="pts-more" title="Where everyone's points come from">Points</button></h3><div class="players" id="players"></div></section>
         <section><h3>Dice stats <button class="btn small" id="stats-more">Details</button></h3>
           <div class="hint" id="dice-sum" style="margin:-4px 0 6px"></div>
           <div class="stats" id="stats"></div><div class="stats-l" id="stats-l"></div>
@@ -726,6 +735,7 @@ function renderGame(v) {
     $('#roomtag').onclick = () => { if (!S.replay) copyInvite(); };
     $('#savebtn').onclick = downloadSave;
     $('#stats-more').onclick = () => openModal('dice');
+    $('#pts-more').onclick = () => openModal('points');
     $('#board').addEventListener('click', onBoardClick);
     bindZoom();
     const muteLabel = () => { $('#mute').textContent = soundOn() ? '🔔' : '🔕'; };
@@ -1240,6 +1250,38 @@ function renderDock(v) {
   });
 }
 
+// ---------- points ----------
+const POINT_COLS = [
+  ['settlements', '🏠', 'Settlements'], ['cities', '🏰', 'Cities'], ['route', '🛤️', 'Grand Route'], ['watch', '🛡️', 'Strongest Watch'],
+  ['monuments', '🗿', 'Monuments'], ['capitals', '👑', 'Capitals'], ['defender', '⚔️', 'Defender of the Isle'], ['merchant', '💰', 'Merchant'], ['edicts', '📜', 'Point edicts'],
+];
+const pointsTitle = (p) => (p.points || []).map((x) => `${x.label}: ${x.count > 1 || x.each > 1 ? `${x.count}×${x.each} = ` : ''}${x.n}`).join(' · ') || 'No points yet';
+// One row per player, one column per kind of point anyone has; each cell shows count × value.
+function pointsTable(v, ranked) {
+  const rows = ranked || v.players.slice().sort((a, b) => (b.vpTotal ?? b.vp) - (a.vpTotal ?? a.vp));
+  const cols = POINT_COLS.filter(([k]) => rows.some((p) => (p.points || []).some((x) => x.key === k)));
+  const cell = (p, k) => {
+    const x = (p.points || []).find((q) => q.key === k);
+    if (!x) return '<td class="hint">—</td>';
+    return `<td title="${esc(x.label)}"><b>${x.n}</b>${x.count > 1 || x.each > 1 ? `<span class="hint"> ${x.count}×${x.each}</span>` : ''}</td>`;
+  };
+  return `<div class="pts-wrap"><table class="stat-table pts"><thead><tr><th>Player</th>${cols.map(([, ico, name]) => `<th title="${name}">${ico}<span class="pts-h"> ${name}</span></th>`).join('')}<th>Total</th></tr></thead>
+    <tbody>${rows.map((p) => `<tr class="${p.id === v.winner ? 'win' : ''} ${p.id === v.me ? 'mine' : ''}"><td>${chip(p.color)} ${esc(p.name)}${p.id === v.winner ? ' 🏆' : ''}</td>${cols.map(([k]) => cell(p, k)).join('')}
+      <td class="pts-total">${p.vpTotal ?? p.vp}${!v.crowns && (p.vpTotal === null || p.vpTotal === undefined) ? '<span class="hint" title="plus any hidden Monuments">+?</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function pointsRules(v) {
+  const r = ['🏠 Settlement: 1 point', '🏰 City: 2 points', '🛤️ Grand Route: 2 points for the longest road (5 or more), until someone builds a longer one'];
+  if (v.crowns) {
+    r.push('👑 Capital: 2 points each — the first to level 4 of a city track founds it; the first to level 5 takes it over. Capitals can\'t be sacked',
+      '⚔️ Defender of the Isle: 1 point each time you alone have the strongest wardens when the island holds',
+      '💰 Merchant: 1 point while the merchant is yours (until someone plays another Merchant)',
+      '📜 Point edicts (Printing Press, Charter): 1 point each, counted as soon as they\'re drawn');
+  } else {
+    r.push('🛡️ Strongest Watch: 2 points for the first to play 3 Guards, until someone plays more', '🗿 Monument card: 1 point, hidden until the end (it counts for you right away)');
+  }
+  return r.map((x) => `<li>${x}</li>`).join('');
+}
+
 // ---------- side panels ----------
 function renderPlayers(v) {
   const t = v.turn; const stalled = v.stalled || [];
@@ -1253,7 +1295,7 @@ function renderPlayers(v) {
       <div class="pl-top">${chip(p.color)}<span class="pl-name">${esc(p.name)}${p.id === v.me ? ' <span class="hint">(you)</span>' : ''}</span>
         ${p.id === v.hostId ? '<span class="badge">host</span>' : ''}
         ${p.connected || S.replay ? '' : '<span class="badge">offline</span>'}
-        <span class="pl-vp" title="victory points">${vpTxt}</span></div>
+        <span class="pl-vp" title="${esc(pointsTitle(p))} — click for the breakdown" data-points role="button" tabindex="0">${vpTxt}</span></div>
       <div class="pl-stats">
         <span title="cards in hand">🃏 ${p.cards}</span>${p.cr ? crPlayerStats(v, p) : `<span title="scrolls">📜 ${p.scrolls}</span>
         <span title="guards played">🛡️ ${p.guards}</span>`}<span title="longest road">🛤️ ${p.roadLen}</span>
@@ -1270,6 +1312,7 @@ function renderPlayers(v) {
     $('#players').insertAdjacentHTML('beforeend', '<button class="btn small" data-claim>Host is offline — become host</button>');
     $('#players [data-claim]').onclick = () => send({ type: 'claimHost' });
   }
+  $('#players').querySelectorAll('[data-points]').forEach((x) => { x.onclick = () => openModal('points'); x.onkeydown = (e) => { if (e.key === 'Enter') openModal('points'); }; });
   const sk = $('#players [data-skip]');
   if (sk) sk.onclick = () => { if (confirm('Skip ahead for the player(s) holding up the game? (Random discards / auto-roll / end their turn)')) send({ type: 'skip' }); };
   $('#bankinfo').textContent = v.bank ? `bank: ${handKinds(v).map((r) => RM[r].ico + v.bank[r]).join(' ')}${v.crowns ? '' : ` · 📜${v.deckCount}`}` : '';
@@ -1443,7 +1486,7 @@ function renderModal(v) {
   // forced modals take priority
   let kind = S.modal;
   // after the game, the winner window shows unless the player opened something to look at (dice stats, card reference)
-  if (v.status === 'over' && !S.replay && !['dice', 'cardref'].includes(S.modal)) kind = 'over';
+  if (v.status === 'over' && !S.replay && !['dice', 'cardref', 'points', 'crref'].includes(S.modal)) kind = 'over';
   else if (t.phase === 'discard' && v.pendingDiscard[v.me]) { if (S.modal !== 'discard') { S.modal = 'discard'; S.ui = { cards: zero() }; } kind = 'discard'; }
   else if (t.phase === 'steal' && isMine(v)) kind = 'steal';
   else if (v.crowns && v.status === 'playing' && v.crowns.me && v.crowns.me.freePicks > 0) kind = 'freepick';
@@ -1459,7 +1502,7 @@ function renderModal(v) {
   let html = '';
   if (kind === 'discard') {
     const need = v.pendingDiscard[v.me]; const c = S.ui.cards; const n = cnt(c);
-    html = `<h2>The bandits strike!</h2><p>You hold more than ${v.settings.discardLimit} cards. Choose <b>${need}</b> to discard.</p>
+    html = `<h2>The bandits strike!</h2><p>You hold more than ${v.handLimit || v.settings.discardLimit} cards${v.crowns && v.handLimit > v.settings.discardLimit ? ` (${v.settings.discardLimit} + 2 for each city wall)` : ''}. Choose <b>${need}</b> to discard.</p>
       ${stepperGrid('cards', c, hand, need)}
       <div class="foot"><span class="hint" style="flex:1">${n === need ? `<b>${n} / ${need}</b> selected — ready` : `${n} / ${need} selected`}</span><button class="btn primary" data-do="discard" ${n === need ? '' : 'disabled'}>Discard</button></div>`;
   } else if (kind === 'cardref') {
@@ -1520,6 +1563,12 @@ function renderModal(v) {
     html = `<h2>Trade</h2>${tabs}${body}<div class="foot"><button class="btn" data-do="close">Close</button></div>`;
   } else if (kind === 'dice') {
     html = diceModal(v);
+  } else if (kind === 'points') {
+    html = `<h2>🏆 How the points add up</h2>
+      <p class="hint" style="margin:0">First to <b>${v.settings.vpTarget}</b> points wins, on their own turn.${v.status === 'over' || v.crowns ? '' : ' Other players\' hidden Monuments only show at the end.'}</p>
+      ${pointsTable(v)}
+      <h3 style="font-size:16px">What scores</h3><ul class="pts-rules">${pointsRules(v)}</ul>
+      <div class="foot"><button class="btn" data-do="close">Close</button></div>`;
   } else if (kind === 'crref' || kind === 'freepick' || kind === 'edictpick' || kind.startsWith('cr-')) {
     html = crModalHtml(v, kind);
   } else if (kind === 'counter') {
@@ -1535,9 +1584,7 @@ function renderModal(v) {
   } else if (kind === 'over') {
     const ranked = v.players.slice().sort((a, b) => (b.vpTotal || 0) - (a.vpTotal || 0));
     html = `<h2>🏆 ${esc(pname(v, v.winner))} wins!</h2>
-      <div class="scoreboard">${ranked.map((p) => `<div>${chip(p.color)}<b style="flex:1">${esc(p.name)}</b>
-        ${p.longest ? '<span class="badge award">Route</span>' : ''}${p.army ? '<span class="badge award">Watch</span>' : ''}
-        <span class="pl-vp">${p.vpTotal}</span></div>`).join('')}</div>
+      ${pointsTable(v, ranked)}
       <div class="foot" style="justify-content:flex-start">
         <button class="btn" data-do="replay">▶ Watch replay</button>
         <button class="btn" data-do="dicestats">🎲 Dice stats</button>
@@ -1596,7 +1643,7 @@ function renderModal(v) {
     };
   });
   const bd = root.querySelector('[data-backdrop]');
-  bd.onclick = (e) => { if (e.target === bd && (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref'].includes(kind) || kind.startsWith('cr-'))) closeModal(); };
+  bd.onclick = (e) => { if (e.target === bd && (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref', 'points'].includes(kind) || kind.startsWith('cr-'))) closeModal(); };
 }
 
 // Turn timer: a countdown pill in the top bar ("0:42 · Marlo") plus a bar draining across the top of
@@ -1625,7 +1672,7 @@ setInterval(() => {
 // Shortcuts: R roll · E end turn / done building · T trade · B bank · 1–4 road/settlement/city/dev card · Esc cancel
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref'].includes(S.modal) || (S.modal && S.modal.startsWith('cr-'))) closeModal();
+    if (['trade', 'plenty', 'monopoly', 'counter', 'dice', 'cardref', 'crref', 'points'].includes(S.modal) || (S.modal && S.modal.startsWith('cr-'))) closeModal();
     else if (S.mode) { S.mode = null; S.cr = null; if (S.v) { renderStatus(S.v); renderDock(S.v); renderBoardDyn(S.v); } }
     return;
   }
@@ -1803,7 +1850,8 @@ function replayView(game) {
   for (const p of v.players) {
     const real = game.players.find((x) => x.id === p.id);
     p.hand = real.hand;
-    p.vpTotal = G2.viewFor(game, p.id).players.find((x) => x.id === p.id).vpTotal;
+    const own = G2.viewFor(game, p.id).players.find((x) => x.id === p.id);
+    p.vpTotal = own.vpTotal; p.points = own.points;
   }
   v.stalled = [];
   v.deadlineIn = null;

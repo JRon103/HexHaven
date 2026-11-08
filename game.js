@@ -165,7 +165,7 @@ function buildBoard(cfg) {
 function createGame(code) {
   return {
     code, createdAt: Date.now(), updatedAt: Date.now(), status: 'lobby', hostId: null,
-    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false },
+    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false, firstRaid: 7 },
     players: [], log: [], logSeq: 0, version: 0, rng: { s: newSeed() },
   };
 }
@@ -390,14 +390,22 @@ function updateArmy(game, p) {
   }
 }
 
+// Where a player's points come from. Hidden Monuments are only listed when `hidden` is true (their owner, or after the game).
+function pointParts(game, p, hidden) {
+  const out = [];
+  const mine = Object.values(game.buildings).filter((b) => b.owner === p.id);
+  const villages = mine.filter((b) => b.type === 'village').length; const towns = mine.length - villages;
+  if (villages) out.push({ key: 'settlements', label: 'Settlements', count: villages, each: 1, n: villages });
+  if (towns) out.push({ key: 'cities', label: 'Cities', count: towns, each: 2, n: 2 * towns });
+  if (game.longestHolder === p.id) out.push({ key: 'route', label: 'Grand Route (longest road)', count: 1, each: 2, n: 2 });
+  if (game.armyHolder === p.id) out.push({ key: 'watch', label: 'Strongest Watch (3+ Guards)', count: 1, each: 2, n: 2 });
+  if (hidden) { const m = p.scrolls.filter((s) => s.type === 'vp').length; if (m) out.push({ key: 'monuments', label: 'Monuments (hidden)', count: m, each: 1, n: m }); }
+  if (CR.on(game)) out.push(...CR.pointParts(game, p));
+  return out;
+}
+
 function vp(game, p, hidden) {
-  let v = 0;
-  for (const b of Object.values(game.buildings)) if (b.owner === p.id) v += b.type === 'town' ? 2 : 1;
-  if (game.longestHolder === p.id) v += 2;
-  if (game.armyHolder === p.id) v += 2;
-  if (hidden) v += p.scrolls.filter((s) => s.type === 'vp').length;
-  if (CR.on(game)) v += CR.extraPoints(game, p);
-  return v;
+  return pointParts(game, p, hidden).reduce((s, x) => s + x.n, 0);
 }
 
 function checkWin(game, pid) {
@@ -1022,6 +1030,7 @@ function cleanSettings(s) {
   if (s.friendlyBandit !== undefined) out.friendlyBandit = !!s.friendlyBandit;
   if (s.turnTimer !== undefined && [0, 60, 90, 120, 180].includes(Number(s.turnTimer))) out.turnTimer = Number(s.turnTimer);
   if (['auto', 'small', 'large'].includes(s.boardSize)) out.boardSize = s.boardSize;
+  if (s.firstRaid !== undefined && CR.FIRST_RAID.includes(Number(s.firstRaid))) out.firstRaid = Number(s.firstRaid);
   return out;
 }
 
@@ -1033,6 +1042,7 @@ const SETTING_LABEL = {
   builderPhase: (v) => `builder phase ${v ? 'on' : 'off'}`,
   turnTimer: (v) => `turn timer ${v ? `${v / 60} min` : 'off'}`,
   friendlyBandit: (v) => `friendly bandit ${v ? 'on' : 'off'}`,
+  firstRaid: (v) => `first raid after ${v} ship steps`,
 };
 function describeChanges(game, changes) {
   return Object.entries(changes).map(([k, v]) => SETTING_LABEL[k](v)).join(', ');
@@ -1128,6 +1138,7 @@ function viewFor(game, pid) {
     pieces: p.pieces, vp: vp(game, p, false),
     ...(CR.on(game) ? { cr: CR.publicPlayer(game, p) } : {}),
     vpTotal: p.id === pid || over ? vp(game, p, true) : null,
+    points: pointParts(game, p, p.id === pid || over),
     hand: over ? p.hand : undefined,
     longest: game.longestHolder === p.id, army: game.armyHolder === p.id,
   }));
@@ -1169,6 +1180,7 @@ function viewFor(game, pid) {
     deadlineIn: game.status === 'playing' && game.deadline ? Math.max(0, game.deadline - Date.now()) : null,
     deadlineTotal: game.deadline ? game.deadlineTotal || null : null,
     hand: me ? me.hand : null,
+    handLimit: me ? discardLimit(game, me) : null,
     myScrolls: me ? me.scrolls.map((s) => ({ type: s.type, fresh: s.bought >= t.number })) : [],
     rates: me ? Object.fromEntries(CARDS.map((r) => [r, rate(game, pid, r)])) : null,
     hints,

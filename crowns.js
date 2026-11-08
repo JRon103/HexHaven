@@ -25,6 +25,9 @@ const POWER = {
 const RANK = { 1: 'Warden', 2: 'Veteran', 3: 'Champion' };
 const EVENT_FACES = ['ship', 'ship', 'ship', 'guild', 'council', 'academy'];
 const RAID_AT = 7;          // the ship reaches the island on its 7th step
+const FIRST_RAID = [7, 10, 14, 21]; // lobby choices for the first arrival (later raids always take 7 steps)
+// Steps the ship needs this time: the first arrival can be set later in the lobby to give everyone time to build.
+const raidAt = (game) => (game.cr.raids === 0 && FIRST_RAID.includes(game.settings.firstRaid) ? game.settings.firstRaid : RAID_AT);
 const EDICT_HAND = 4;       // most edicts you can hold (point edicts don't count)
 const COST = {
   wall: { clay: 2 }, warden: { fleece: 1, iron: 1 }, activate: { wheat: 1 }, promote: { fleece: 1, iron: 1 }, healer: { iron: 2, wheat: 1 },
@@ -106,12 +109,16 @@ function newTurn(game) {
 }
 
 // ---------- points, harvest, trade rates, hand limit ----------
-function extraPoints(game, p) {
-  let v = 2 * TRACKS.filter((k) => { const c = game.cr.capitals[k]; return c !== null && game.buildings[c] && game.buildings[c].owner === p.id; }).length;
-  v += p.cr.defender + p.cr.edictVP;
-  if (game.cr.merchant && game.cr.merchant.owner === p.id) v += 1;
-  return v;
+function pointParts(game, p) {
+  const caps = TRACKS.filter((k) => { const c = game.cr.capitals[k]; return c !== null && game.buildings[c] && game.buildings[c].owner === p.id; });
+  const out = [];
+  if (caps.length) out.push({ key: 'capitals', label: `Capital${caps.length > 1 ? 's' : ''} (${caps.map((k) => TRACK_NAME[k]).join(', ')})`, count: caps.length, each: 2, n: 2 * caps.length });
+  if (p.cr.defender) out.push({ key: 'defender', label: 'Defender of the Isle', count: p.cr.defender, each: 1, n: p.cr.defender });
+  if (game.cr.merchant && game.cr.merchant.owner === p.id) out.push({ key: 'merchant', label: 'Merchant', count: 1, each: 1, n: 1 });
+  if (p.cr.edictVP) out.push({ key: 'edicts', label: 'Point edicts', count: p.cr.edictVP, each: 1, n: p.cr.edictVP });
+  return out;
 }
+function extraPoints(game, p) { return pointParts(game, p).reduce((s, x) => s + x.n, 0); }
 
 function cityYield(res, type) {
   if (type === 'town' && TERRAIN_COM[res]) return [[res, 1], [TERRAIN_COM[res], 1]];
@@ -158,8 +165,8 @@ function rollEvent(game, p, red, sum) {
   if (game.lastRoll) game.lastRoll.event = face;
   if (face === 'ship') {
     cr.raiders++;
-    X.log(game, `⛵ The raiders' ship sails closer (${cr.raiders}/${RAID_AT}).`);
-    if (cr.raiders >= RAID_AT && raid(game)) { cr.afterRaid = sum; game.turn.phase = 'raid'; return true; }
+    X.log(game, `⛵ The raiders' ship sails closer (${cr.raiders}/${raidAt(game)}).`);
+    if (cr.raiders >= raidAt(game) && raid(game)) { cr.afterRaid = sum; game.turn.phase = 'raid'; return true; }
   } else {
     X.log(game, `🚪 The ${TRACK_NAME[face]} gate opens (red die ${red}).`);
     drawFor(game, face, red);
@@ -206,11 +213,15 @@ function raid(game) {
   const defense = Object.values(byPlayer).reduce((s, n) => s + n, 0);
   X.log(game, `⚔️ The raiders land! Raider strength ${attack} (one per city) against wardens ${defense}.`, null, { type: 'raid', attack, defense });
   cr.pendingRaid = {};
+  const rec = { id: cr.raids + 1, attack, defense, strength: byPlayer, outcome: 'empty', defender: null, shared: [], losers: [], choosing: [] };
+  cr.lastRaid = rec;
   if (attack > 0 && defense >= attack) {
     const best = Math.max(...Object.values(byPlayer));
     const top = game.players.filter((p) => byPlayer[p.id] === best && best > 0);
-    if (top.length === 1) { top[0].cr.defender++; X.log(game, `🛡️ The island holds! ${top[0].name} is Defender of the Isle (+1 point).`); }
+    rec.outcome = 'hold';
+    if (top.length === 1) { rec.defender = top[0].id; top[0].cr.defender++; X.log(game, `🛡️ The island holds! ${top[0].name} is Defender of the Isle (+1 point).`); }
     else if (top.length) {
+      rec.shared = top.map((p) => p.id);
       for (const p of top) p.cr.edictPicks++;
       X.log(game, `🛡️ The island holds! ${top.map((p) => p.name).join(', ')} share the honor and each draw an edict.`);
     }
@@ -218,13 +229,15 @@ function raid(game) {
     const exposed = game.players.filter((p) => ownCities(game, p.id).some((v) => !capitalAt(game, v)));
     if (exposed.length) {
       const weakest = Math.min(...exposed.map((p) => byPlayer[p.id]));
+      rec.outcome = 'fall';
       for (const p of exposed.filter((x) => byPlayer[x.id] === weakest)) {
         const open = ownCities(game, p.id).filter((v) => !capitalAt(game, v));
+        rec.losers.push(p.id);
         if (open.length === 1) sack(game, open[0]);
-        else cr.pendingRaid[p.id] = 1;
+        else { cr.pendingRaid[p.id] = 1; rec.choosing.push(p.id); }
       }
       X.log(game, `🔥 The raiders win. ${exposed.filter((x) => byPlayer[x.id] === weakest).map((x) => x.name).join(', ')} lose a city.`);
-    } else X.log(game, '🔥 The raiders win, but every city is a protected capital.');
+    } else { rec.outcome = 'capitals'; X.log(game, '🔥 The raiders win, but every city is a protected capital.'); }
   } else X.log(game, 'There are no cities to plunder yet; the raiders sail away.');
   for (const w of Object.values(cr.wardens)) w.active = false;
   cr.raiders = 0;
@@ -689,7 +702,7 @@ function hints(game, pid) {
 function view(game, pid) {
   const cr = game.cr; const me = X.P(game, pid);
   return {
-    raiders: cr.raiders, raidAt: RAID_AT, raids: cr.raids, banditFree: banditFree(game), lastEvent: cr.lastEvent,
+    raiders: cr.raiders, raidAt: raidAt(game), raids: cr.raids, lastRaid: cr.lastRaid || null, banditFree: banditFree(game), lastEvent: cr.lastEvent,
     attack: totalCities(game), defense: game.players.reduce((s, p) => s + strength(game, p.id), 0),
     wardens: cr.wardens, walls: cr.walls, capitals: cr.capitals, merchant: cr.merchant, pendingRaid: cr.pendingRaid,
     deckCounts: Object.fromEntries(TRACKS.map((k) => [k, cr.decks[k].length])),
@@ -703,6 +716,6 @@ function view(game, pid) {
 
 module.exports = {
   COM, TRACKS, TRACK_COM, TRACK_NAME, POWER, RANK, EVENT_FACES, RAID_AT, EDICT_HAND, COST, EDICTS,
-  bind, on, handles, setup, newTurn, wardenAt, banditFree, extraPoints, cityYield, afterHarvest, rate, wallBonus, canAffordAny,
+  FIRST_RAID, bind, on, handles, setup, newTurn, wardenAt, banditFree, extraPoints, pointParts, cityYield, afterHarvest, rate, wallBonus, canAffordAny,
   takeFixedDice, rollEvent, autoRaid, act, publicPlayer, hints, view, capitalAt, strength, ownCities, wardenSpots, reach,
 };

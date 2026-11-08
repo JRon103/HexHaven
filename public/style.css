@@ -549,3 +549,48 @@ html.reduce-motion .warden-glow { animation: none; }
 @media (max-width: 900px) { .cr-tracks { grid-template-columns: 1fr; } }
 /* the dock never squeezes the board: past 45% of the screen it scrolls (Crowns & Raiders has a taller dock) */
 @media (min-width: 901px) { .dock { max-height: 45vh; overflow-y: auto; } }
+
+/* the raid scene */
+.raidfx { pointer-events: auto; cursor: pointer; width: min(440px, calc(100% - 24px)); background: rgba(255,250,240,.97); color: #2b2118; border-radius: 18px; padding: 14px 18px 10px;
+  border: 3px solid #3a2a6b; box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 18px 40px rgba(0,0,0,.45); display: grid; gap: 10px; text-align: center; z-index: 6;
+  animation: raidin .5s cubic-bezier(.3,1.4,.5,1); transition: opacity .4s, transform .4s; }
+@keyframes raidin { from { transform: translateY(-30px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+.raidfx.out { opacity: 0; transform: translateY(-12px); }
+.rf-head { font-family: var(--serif); font-size: 22px; font-weight: 800; }
+.rf-head .hint { font-family: var(--sans); font-size: 13px; color: #7a6a58; font-weight: 600; }
+.rf-vs { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.rf-side { min-width: 110px; padding: 6px 10px; border-radius: 14px; }
+.rf-side.bad { background: #f8dcd8; color: #8a2016; }
+.rf-side.good { background: #dff1e4; color: #1d6b3b; }
+.rf-n { font-family: var(--serif); font-size: 46px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.rf-l { font-weight: 800; font-size: 14px; line-height: 1.2; }
+.rf-l span { font-weight: 600; font-size: 12px; opacity: .8; }
+.rf-mid { font-family: var(--serif); font-size: 20px; font-weight: 800; color: #7a6a58; }
+.rf-players { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; font-size: 13px; }
+.rf-p { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 5px; border-radius: 99px; background: #f1e6cf; border: 1.5px solid transparent; }
+.rf-p .chip { width: 12px; height: 12px; }
+.raidfx.done .rf-p.def { border-color: #d4a21f; background: #fff1bf; }
+.raidfx.done .rf-p.lost { border-color: #b3261e; background: #f8dcd8; text-decoration: line-through; text-decoration-color: rgba(179,38,30,.5); }
+.rf-out { opacity: 0; transform: scale(.85); transition: opacity .35s, transform .35s cubic-bezier(.3,1.6,.5,1); border-radius: 12px; padding: 8px 10px; }
+.raidfx.done .rf-out { opacity: 1; transform: none; }
+.raidfx.hold .rf-out { background: #2c8a4f; color: #fff; }
+.raidfx.fall .rf-out { background: #b3261e; color: #fff; }
+.raidfx.fall { border-color: #b3261e; }
+.raidfx.hold.done { border-color: #2c8a4f; }
+.rf-title { font-family: var(--serif); font-size: 24px; font-weight: 800; }
+.rf-sub { font-size: 15px; }
+.rf-hint { font-size: 11.5px; color: #8a7a66; }
+.raid-flash { position: absolute; inset: 0; pointer-events: none; animation: flash 1.5s ease-out forwards; }
+.raid-flash.fall { box-shadow: inset 0 0 0 6px #b3261e, inset 0 0 120px 30px rgba(170,30,20,.5); }
+.raid-flash.hold { box-shadow: inset 0 0 0 6px #2c8a4f, inset 0 0 120px 30px rgba(40,140,80,.4); }
+html.reduce-motion :is(.raidfx, .raid-flash, .rf-out) { animation-duration: .01s !important; transition: none !important; }
+/* points */
+.pl-vp[data-points] { cursor: pointer; border-radius: 8px; }
+.pl-vp[data-points]:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pts-wrap { overflow-x: auto; }
+table.pts td, table.pts th { white-space: nowrap; }
+table.pts tr.win td { background: rgba(231,181,69,.18); font-weight: 700; }
+table.pts tr.mine td:first-child { font-weight: 800; }
+.pts-total { font-family: var(--serif); font-size: 18px; font-weight: 800; }
+.pts-rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+@media (max-width: 700px) { .pts-h { display: none; } }
