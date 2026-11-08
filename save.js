@@ -243,7 +243,7 @@ function decodeSnapshot(snap, code = 'SAVE') {
   const phase = phases.includes(T.phase) ? T.phase : 'preroll';
   const idx = Math.max(0, ordered.findIndex((p) => p.seat === Number(T.player)));
   game.turn = {
-    idx, number: Number(T.number) || 1, phase, dice: Array.isArray(T.dice) ? T.dice : null, devPlayed: !!T.devCardPlayed,
+    idx, number: Number.isInteger(Number(T.number)) && Number(T.number) >= 0 && T.number !== null && T.number !== '' ? Number(T.number) : 1, phase, dice: Array.isArray(T.dice) ? T.dice : null, devPlayed: !!T.devCardPlayed,
     setup: T.setup ? { pos: Number(T.setup.step) || 0, need: T.setup.need === 'road' ? 'road' : 'village', last: T.setup.last ? geo.cornerId(T.setup.last) : null } : { pos: 0, need: 'village', last: null },
     freeRoads: Number(T.freeRoads) || 0, afterRoads: T.afterRoads || null, victims: (T.victims || []).map(idOf), afterRobber: T.afterRobber || null,
     builder: idOf(T.builder), builderQueue: (T.builderQueue || []).map(idOf),
