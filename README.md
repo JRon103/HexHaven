@@ -30,7 +30,9 @@ It prints a public `https://….trycloudflare.com` link. Share the room invite f
 
 The game runs on Google Cloud Run at https://hexhaven-401668287786.us-central1.run.app.
 
-Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the bot self-play tests and, if they pass, redeploys to Cloud Run. GitHub signs in to Google with Workload Identity Federation, so no keys are stored. Only this repository's workflows can deploy, using the `github-deployer` service account. A redeploy restarts the server, which ends any game in progress, so push between game nights.
+Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the bot self-play tests and, if they pass, redeploys to Cloud Run. GitHub signs in to Google with Workload Identity Federation, so no keys are stored. Only this repository's workflows can deploy, using the `github-deployer` service account.
+
+**Deploys don't end games.** Rooms are kept in the private bucket `gs://hexhaven-julian-2026-rooms` (env `ROOMS_BUCKET`): every change is saved there a second later, the old server saves once more when Cloud Run stops it, and the new server loads the rooms and, for its first few minutes, picks up anything the old one saved after that. Open pages reconnect and reload by themselves, so players see a short hiccup and keep their seats. The same covers Cloud Run stopping an idle server.
 
 ### Which version is running?
 
@@ -43,7 +45,7 @@ Every push to `main` triggers [.github/workflows/deploy.yml](.github/workflows/d
 
 - **Server:** every push to `main` deploys automatically, in about a minute. To redeploy without a code change, open the repo's **Actions** tab → *Deploy to Cloud Run* → **Run workflow** on `main`. Don't use **Re-run** on an old run: that deploys that older commit.
 - **Players' browsers:** an open page checks the build whenever it reconnects or the tab becomes visible again. If the server is newer, the page reloads itself once (your seat is kept). Script and style links carry the build ID, so browsers never use a stale cached copy.
-- A deploy restarts the server, which ends any game in progress.
+- A deploy restarts the server; games carry on (see above).
 
 ## Rules summary
 
@@ -83,10 +85,11 @@ Pick it under **Game mode** in the lobby. It works with 2–8 players, plays to 
 - **Setup:** your second piece is a city.
 - **Edicts:** 3 decks of 18 cards, each with its rules text in the game. Point edicts count at once.
 
-The **raiders' track** in the sidebar shows how close the ship is and whether the island would hold right now. Saves, loading and replays work in this mode too: the save file gains a `crowns` section with improvements, wardens, walls, capitals, the merchant, edicts and the decks. Commodities are written `Pa`, `Li` and `Si`.
+On wide screens your improvements, wardens and edicts sit in a see-through **city panel** on the left of the board (click its title to fold it); on phones they stay under the board. The **raiders' track** in the sidebar shows how close the ship is and whether the island would hold right now. Saves, loading and replays work in this mode too: the save file gains a `crowns` section with improvements, wardens, walls, capitals, the merchant, edicts and the decks. Commodities are written `Pa`, `Li` and `Si`.
 
 ## Quality of life
 
+- **New map:** before anyone places a piece, the host can click **🗺️ New map**, and anyone else can **ask for a new map**. Everyone votes 👍/👎: more than half decides, and on a tie the host chooses. Rerolls are part of the history, so replays show them too.
 - **Settings suggestions:** in the lobby anyone can change a setting. For non-hosts that makes a draft they can send to the host as a suggestion. Everyone can vote 👍/👎, and the host applies or dismisses it; votes never change settings by themselves.
 
 - **Turn timer** (optional, 1–3 minutes): when time runs out the game plays for you. It rolls, discards at random, moves the bandit, or ends the turn. Short steps like discarding get at most 1 minute.

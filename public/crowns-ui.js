@@ -319,10 +319,11 @@ function crImprove(v, k) {
 }
 
 function crBindDock(v) {
-  const dock = $('#dock');
-  dock.querySelectorAll('[data-improve]').forEach((b) => { b.onclick = () => crImprove(S.v, b.dataset.improve); });
-  dock.querySelectorAll('[data-edict]').forEach((b) => { b.onclick = () => crStartEdict(S.v, b.dataset.edict); });
-  dock.querySelectorAll('[data-cr]').forEach((b) => {
+  const all = (sel) => [...document.querySelectorAll(`#dock ${sel}, #cr-float ${sel}`)];
+  all('[data-improve]').forEach((b) => { b.onclick = () => crImprove(S.v, b.dataset.improve); });
+  all('[data-edict]').forEach((b) => { b.onclick = () => crStartEdict(S.v, b.dataset.edict); });
+  all('[data-crfold]').forEach((b) => { b.onclick = () => { try { localStorage.setItem('hexhaven:crpanel', crFolded() ? 'open' : 'min'); } catch {} renderDock(S.v); }; });
+  $('#dock').querySelectorAll('[data-cr]').forEach((b) => {
     b.onclick = () => {
       if (b.dataset.cr === 'cancel') { S.mode = null; S.cr = null; render(); }
       if (b.dataset.cr === 'edict-go') crPlayEdict(S.v);
@@ -330,6 +331,26 @@ function crBindDock(v) {
   });
   // build buttons for walls and wardens choose a spot on the board, like roads
 }
+
+// ---------- the panel on the left of the board (wide screens) ----------
+// Improvements, wardens and edicts float over the left edge of the map, see-through until you point at them,
+// so the dock under the board stays as small as in the classic game. It folds down to a single bar.
+const crFloatOn = () => window.innerWidth > 900 && !S.replay;
+const crFolded = () => { try { return localStorage.getItem('hexhaven:crpanel') === 'min'; } catch { return false; } };
+function crRenderFloat(v, hand) {
+  const f = $('#cr-float');
+  if (!f) return;
+  if (!crFloatOn() || !v.crowns.me || v.status !== 'playing') { f.hidden = true; f.innerHTML = ''; return; }
+  f.hidden = false;
+  const folded = crFolded();
+  const me = v.crowns.me;
+  const lv = CR_TRACKS.map((k) => `${CRT[k].ico}${me.improve[k]}`).join(' ');
+  f.classList.toggle('folded', folded);
+  f.innerHTML = `<button class="crf-head" data-crfold aria-expanded="${!folded}" title="${folded ? 'Show' : 'Hide'} your city panel">
+      <b>👑 Your city</b><span class="crf-sum">${lv} · 🛡️ ${me.strength} · 📜 ${me.edicts.length}</span><span class="crf-chev">${folded ? '▸' : '▾'}</span></button>
+    ${folded ? '' : crDockPanel(v, hand)}`;
+}
+window.addEventListener('resize', () => { if (S.v && S.screen === 'game' && S.v.crowns) renderDock(S.v); });
 
 // ---------- players panel ----------
 function crPlayerStats(v, p) {

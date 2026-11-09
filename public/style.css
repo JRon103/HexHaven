@@ -642,3 +642,38 @@ table.pts tr.mine td:first-child { font-weight: 800; }
 /* language picker */
 .langbtn { white-space: nowrap; }
 .hero-tags .hero-lang { background: rgba(255,255,255,.12); color: var(--head-ink); border-color: rgba(255,255,255,.25); box-shadow: none; }
+
+/* ---------- left side of the board: trade offers, the map vote, the Crowns city panel ---------- */
+.left-stack { position: absolute; top: 10px; left: 10px; bottom: 46px; width: min(330px, calc(100% - 70px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; z-index: 5; }
+.left-stack > * { pointer-events: auto; }
+.left-stack .trade-float { position: static; width: auto; max-height: 55%; flex: 0 0 auto; }
+.map-vote .tradebox { box-shadow: 0 8px 24px rgba(0,0,0,.35); border-width: 2px; }
+.map-vote { animation: slidein .3s ease-out; flex: 0 0 auto; }
+.mv-tie { font-weight: 800; color: var(--accent); }
+/* the city panel: see-through so the map shows, solid while you use it */
+.cr-float { flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; background: color-mix(in srgb, var(--panel) 74%, transparent); backdrop-filter: blur(6px);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.25); padding: 6px 8px 8px;
+  opacity: .9; transition: opacity .2s, background .2s; }
+.cr-float:hover, .cr-float:focus-within { opacity: 1; background: color-mix(in srgb, var(--panel) 95%, transparent); }
+.cr-float.folded { padding-bottom: 6px; align-self: flex-start; }
+.crf-head { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; font-size: 14px; padding: 2px 2px 4px; color: var(--ink); }
+.crf-head:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.crf-sum { font-size: 12.5px; color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crf-chev { font-size: 13px; color: var(--muted); }
+.cr-float .crpanel { gap: 6px; }
+.cr-float .cr-tracks { grid-template-columns: 1fr; gap: 5px; }
+.cr-float .track { padding: 5px 8px; gap: 3px; grid-template-columns: 1fr auto; align-items: center; }
+.cr-float .track .tr-head, .cr-float .track .tr-pips, .cr-float .track .tr-power { grid-column: 1; }
+.cr-float .track .btn { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+.cr-float .track .tr-reach { display: none; }
+.cr-float .cr-wardens { font-size: 12.5px; }
+.cr-float .devcards { gap: 4px; }
+.cr-float .dc-row { flex-direction: column; gap: 6px; }
+.cr-float .devcard { width: auto; padding: 7px 9px; gap: 3px; }
+.cr-float .devcard p { font-size: 12px; }
+@media (max-width: 900px) { .left-stack { bottom: 10px; } }
+.cr-float .track, .cr-float .track > * { min-width: 0; }
+.cr-float .track .tr-power { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-float .track { background: color-mix(in srgb, var(--tc) 10%, transparent); }
+/* dock: the buttons take their own full row when they can't sit comfortably next to the hand (e.g. 8 cards in Crowns) */
+@media (min-width: 901px) { .dock .actions { flex: 1 1 560px; } }

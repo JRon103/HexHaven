@@ -20,7 +20,10 @@ function botStep(g) {
   if (p.cr.freePicks > 0 && tryAct(g, pid, { type: 'takeFree', res: pick(RES) })) return;
   if (p.cr.edictPicks > 0 && tryAct(g, pid, { type: 'drawEdict', deck: pick(CR.TRACKS) })) return;
   switch (t.phase) {
-    case 'order': return G.act(g, pid, { type: 'roll' });
+    case 'order':
+      if (Math.random() < 0.15 && tryAct(g, pick(g.players).id, { type: 'mapVote', value: pick([1, -1]) })) return;
+      if (Math.random() < 0.05 && tryAct(g, g.hostId, { type: 'rerollMap' })) return;
+      return G.act(g, pid, { type: 'roll' });
     case 'setup': return G.act(g, pid, t.setupNeed === 'village' ? { type: 'buildVillage', vertex: pick(h.villages) } : { type: 'buildRoad', edge: pick(h.roads) });
     case 'preroll':
       if (c.me.edicts.includes('loadeddice') && Math.random() < 0.5) tryAct(g, pid, { type: 'playEdict', kind: 'loadeddice', d1: 1 + Math.floor(Math.random() * 6), d2: 1 + Math.floor(Math.random() * 6) });

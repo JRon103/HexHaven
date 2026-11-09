@@ -94,6 +94,8 @@ function encodeMove(game, pid, a) {
     case 'discard': parts.push(cards(a.cards)); break;
     case 'steal': parts.push('@' + seatOf(a.victim)); if (Number.isInteger(a.card)) parts.push('#' + a.card); break;
     case 'confirmTrade': parts.push('@' + seatOf(a.with)); break;
+    case 'mapVote': parts.push(Number(a.value) === 1 ? 'yes' : Number(a.value) === -1 ? 'no' : 'clear'); break;
+    case 'mapDecide': parts.push(a.reroll ? 'new' : 'keep'); break;
     case 'playScroll': parts.push(a.kind); if (a.res) parts.push(a.res); if (a.res2) parts.push(a.res2); break;
     case 'bankTrade': case 'proposeTrade':
       if (typeof a.give === 'string') parts.push('give', a.give, 'get', a.get); // older single-lot bank form
@@ -140,6 +142,8 @@ function decodeMove(game, line) {
     case 'discard': a.cards = uncards(rest.join(' ')); break;
     case 'steal': a.victim = bySeat(rest[0].slice(1)); if (rest[1]) a.card = Number(rest[1].slice(1)); break;
     case 'confirmTrade': a.with = bySeat(rest[0].slice(1)); break;
+    case 'mapVote': a.value = rest[0] === 'yes' ? 1 : rest[0] === 'no' ? -1 : 0; break;
+    case 'mapDecide': a.reroll = rest[0] === 'new'; break;
     case 'playScroll': a.kind = rest[0]; if (rest[1]) a.res = rest[1]; if (rest[2]) a.res2 = rest[2]; break;
     case 'bankTrade': case 'proposeTrade':
       if (RES.includes(rest[1])) { a.give = rest[1]; a.get = rest[3]; } else { a.give = uncards(between('give', 'get')); a.get = uncards(between('get')); }

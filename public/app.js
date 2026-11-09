@@ -731,7 +731,11 @@ function renderGame(v) {
         <div class="fx" id="fx" aria-live="polite"></div>
         <div class="timerbar" id="timerbar" hidden aria-hidden="true"><div></div></div>
         <div class="seven-banner" id="seven-banner" role="status" hidden></div>
-        <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
+        <div class="left-stack" id="left-stack">
+          <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
+          <div class="map-vote" id="map-vote" role="region" aria-label="Map vote" hidden></div>
+          <div class="cr-float" id="cr-float" role="region" aria-label="Crowns and Raiders" hidden></div>
+        </div>
         <div class="zoomctl" role="group" aria-label="Map zoom">
           <button class="btn small" data-zoom="in" title="Zoom in (+ / mouse wheel / pinch)" aria-label="Zoom in">+</button>
           <button class="btn small" data-zoom="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
@@ -784,6 +788,7 @@ function renderGame(v) {
   $('#chat').hidden = !!S.replay;
   renderPlayers(v);
   renderTrade(v);
+  renderMapVote(v);
   renderStats(v);
   renderLog(v);
   renderModal(v);
@@ -947,7 +952,7 @@ function heroIsland() {
 
 function renderBoardStatic(v) {
   const b = v.board;
-  const key = v.code + ':' + b.hexes.map((h) => h.res + h.num).join(',');
+  const key = v.code + ':' + b.hexes.map((h) => h.res + h.num).join(',') + ':' + b.harbors.map((h) => h.edge + h.type).join(',');
   if (S.boardKey === key) return;
   S.boardKey = key;
   const xs = b.vertices.map((p) => p.x).concat(b.harbors.map((h) => h.x));
@@ -956,8 +961,10 @@ function renderBoardStatic(v) {
   const minX = (Math.min(...xs) - pad) * U, minY = (Math.min(...ys) - pad) * U;
   const w = (Math.max(...xs) - Math.min(...xs) + 2 * pad) * U, h = (Math.max(...ys) - Math.min(...ys) + 2 * pad) * U;
   S.vb0 = [minX, minY, w, h]; S.vb = S.vb0.slice();
-  // start a little zoomed in so tiles are big and the map can be dragged right away; ⤢ shows the whole island
-  zoomBy(b.radius >= 3 ? 1.45 : 1.25);
+  // on smaller screens start a little zoomed in so tiles are big and the map can be dragged right away;
+  // on big screens (1080p and up) the whole island already fits nicely. ⤢ always shows the whole island.
+  const wrapH = ($('#boardwrap') || {}).clientHeight || 0;
+  if (wrapH < 720) zoomBy(b.radius >= 3 ? 1.45 : 1.25); else applyVB();
   // hex corners pushed out (k > 1) or pulled in (k < 1) around the tile's center
   const ring = (hx, k) => hx.v.map((id) => {
     const p = b.vertices[id];
@@ -1216,6 +1223,10 @@ function renderDock(v) {
     if (t.phase === 'builder' && t.builder === v.me) main += '<button class="btn primary pulse" data-act="pass" title="Shortcut: E">Done building</button>';
     if (mine && t.phase === 'roadbuilding') main += '<button class="btn" data-act="skipRoads">Skip free roads</button>';
     if (v.crowns) main += crDockExtraButtons(v);
+    if (v.map && v.map.canReroll) {
+      if (v.hostId === v.me) main += '<button class="btn" data-act="reroll" title="Deal a new island (only before anyone places a piece)">🗺️ New map</button>';
+      else if (!v.map.vote) main += '<button class="btn" data-act="mapvote" title="Ask everyone to vote for a new island">🗳️ Ask for a new map</button>';
+    }
   } else if (v.status === 'over' && S.hideOver) {
     main += '<button class="btn primary" data-act="results">🏆 Show results</button>';
   }
@@ -1238,7 +1249,7 @@ function renderDock(v) {
     <div class="hand">${handKinds(v).map((r) => `<div class="rcard ${hand[r] ? '' : 'zero'}" style="background-color:${RM[r].card};--deep:${RM[r].deep}" title="${RM[r].name}${v.rates ? ` · trades ${v.rates[r]}:1` : ''}">
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
-    ${v.crowns ? crDockPanel(v, hand) : ''}
+    ${v.crowns && !crFloatOn() ? crDockPanel(v, hand) : ''}
     ${scrolls ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
   $('#dock').querySelectorAll('[data-build]').forEach((b) => {
     b.onclick = () => {
@@ -1261,8 +1272,11 @@ function renderDock(v) {
       else if (a === 'results') { S.hideOver = false; renderGame(S.v); }
       else if (a === 'cardref') openModal('cardref');
       else if (a === 'crref') openModal('crref');
+      else if (a === 'reroll') send({ type: 'rerollMap' });
+      else if (a === 'mapvote') send({ type: 'mapVote', value: 1 });
     };
   });
+  if (v.crowns) crRenderFloat(v, hand); else { const f = $('#cr-float'); if (f) f.hidden = true; }
   if (v.crowns) crBindDock(v);
   $('#dock').querySelectorAll('[data-play]').forEach((b) => {
     b.onclick = () => {
@@ -1383,6 +1397,34 @@ function renderTrade(v) {
   sec.querySelectorAll('[data-resp]').forEach((b) => { b.onclick = () => send({ type: 'respondTrade', id: tr.id, accept: b.dataset.resp === '1' }); });
   const c = sec.querySelector('[data-cancel]');
   if (c) c.onclick = () => send({ type: 'cancelTrade' });
+}
+
+// ---------- a new map: the vote box (top left, under any trade offer) ----------
+function renderMapVote(v) {
+  const box = $('#map-vote');
+  if (!box) return;
+  const mv = v.map && v.map.vote;
+  if (!mv || S.replay || v.status !== 'playing') { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const mine = mv.votes[v.me] || 0; const host = v.hostId === v.me;
+  const need = Math.floor(mv.n / 2) + 1;
+  const names = (x) => Object.entries(mv.votes).filter(([, val]) => val === x).map(([id]) => pname(v, id)).join(', ');
+  box.innerHTML = `<div class="tradebox">
+    <b>🗳️ ${esc(pname(v, mv.by))} wants a new map</b>
+    <div class="hint">${mv.yes} yes · ${mv.no} no · ${need} of ${mv.n} decide${mv.tie ? '' : ' (a tie goes to the host)'}</div>
+    ${mv.tie ? `<div class="mv-tie">${host ? 'Tied — you decide:' : 'Tied — the host decides.'}</div>` : ''}
+    <div class="row">
+      ${mv.tie && host ? '<button class="btn small primary" data-mv="new">🗺️ New map</button><button class="btn small" data-mv="keep">Keep this map</button>'
+        : `<button class="btn small ${mine === 1 ? 'on' : ''}" data-mv="1" title="${esc(names(1) || 'No votes yet')}" aria-pressed="${mine === 1}">👍 Yes</button>
+           <button class="btn small ${mine === -1 ? 'on' : ''}" data-mv="-1" title="${esc(names(-1) || 'No votes yet')}" aria-pressed="${mine === -1}">👎 No</button>`}
+    </div></div>`;
+  box.querySelectorAll('[data-mv]').forEach((b) => {
+    b.onclick = () => {
+      const x = b.dataset.mv;
+      if (x === 'new' || x === 'keep') send({ type: 'mapDecide', reroll: x === 'new' });
+      else send({ type: 'mapVote', value: mine === Number(x) ? 0 : Number(x) }); // clicking your vote again takes it back
+    };
+  });
 }
 
 // ---------- dice statistics ----------
@@ -1845,6 +1887,7 @@ const MOVE_TEXT = {
   buildWall: 'built a city wall', buildWarden: 'raised a warden', activateWarden: 'activated a warden', promoteWarden: 'promoted a warden',
   wardenMove: 'moved a warden', wardenDisplace: 'pushed a warden away', wardenChase: 'chased the bandit', improve: 'improved a city track',
   raidLose: 'lost a city to the raiders', takeFree: 'took a free resource', drawEdict: 'drew an edict', playEdict: 'played an edict',
+  rerollMap: 'rerolled the map', mapVote: 'voted on the map', mapDecide: 'decided the map vote',
 };
 
 async function openReplay(file, opts = {}) {

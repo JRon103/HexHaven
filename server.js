@@ -34,30 +34,130 @@ const rooms = new Map();   // code -> game
 const streams = new Map(); // code -> Set<{res, pid}>
 
 // ---------- persistence (so a server restart doesn't wipe running games) ----------
-function load() {
-  try {
-    const list = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    for (const g of list) {
-      if (Date.now() - g.updatedAt > ROOM_TTL) continue;
-      for (const p of g.players) p.connected = false;
-      g.settings = { ...G.createGame(g.code).settings, ...g.settings };
-      rooms.set(g.code, g);
-    }
-    console.log(`Loaded ${rooms.size} saved room(s).`);
-  } catch { /* first run */ }
+// Locally: data/rooms.json. On Cloud Run (ROOMS_BUCKET set) the rooms are also kept in a Cloud Storage bucket,
+// because each new server starts with an empty disk. That makes deploys and idle shutdowns invisible to players:
+//   - every change is uploaded a moment later (one upload at a time, always the latest state),
+//   - on shutdown (SIGTERM) the server uploads right away and closes the live feeds so pages reconnect,
+//   - a new server loads the rooms on startup, then for a couple of minutes keeps picking up anything the old
+//     server saved after that (Cloud Run starts the new one before it stops the old one). Rooms merge by version.
+const BUCKET = process.env.ROOMS_BUCKET || '';
+const OBJECT = process.env.ROOMS_OBJECT || 'rooms.json';
+
+function adopt(g) {
+  for (const p of g.players) p.connected = false;
+  g.settings = { ...G.createGame(g.code).settings, ...g.settings };
+  return g;
 }
+function loadList(list) {
+  let n = 0;
+  for (const g of list) {
+    if (Date.now() - g.updatedAt > ROOM_TTL) continue;
+    const mine = rooms.get(g.code);
+    if (mine && (mine.version || 0) >= (g.version || 0)) continue; // ours is as new or newer
+    adopt(g);
+    if (mine) for (const p of g.players) { const q = mine.players.find((x) => x.id === p.id); if (q) p.connected = q.connected; } // keep who is online
+    rooms.set(g.code, g); n++;
+    if (mine) broadcast(g.code, false); // someone already watching this room: show them the newer state
+  }
+  return n;
+}
+function load() {
+  try { console.log(`Loaded ${loadList(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')))} saved room(s).`); } catch { /* first run */ }
+}
+
+// Cloud Storage over its JSON API, signed in as the server's own service account (no keys, no dependencies).
+let token = null;
+async function gcsToken() {
+  if (token && token.until > Date.now() + 60000) return token.value;
+  if (process.env.K_SERVICE) { // on Cloud Run: the server's own service account
+    const r = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', { headers: { 'Metadata-Flavor': 'Google' } });
+    if (!r.ok) throw new Error(`metadata token ${r.status}`);
+    const j = await r.json();
+    token = { value: j.access_token, until: Date.now() + j.expires_in * 1000 };
+  } else { // running locally with ROOMS_BUCKET set (for testing): your own gcloud login
+    token = { value: execSync('gcloud auth print-access-token', { stdio: ['ignore', 'pipe', 'ignore'], shell: true }).toString().trim(), until: Date.now() + 30 * 60 * 1000 };
+  }
+  return token.value;
+}
+let cloudGen = null; // generation of the object we last read or wrote
+async function cloudRead() {
+  const auth = { Authorization: `Bearer ${await gcsToken()}` };
+  const meta = await fetch(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o/${OBJECT}`, { headers: auth });
+  if (meta.status === 404) return null;
+  if (!meta.ok) throw new Error(`read ${meta.status}`);
+  const { generation } = await meta.json();
+  if (generation === cloudGen) return null;
+  const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o/${OBJECT}?alt=media&generation=${generation}`, { headers: auth });
+  if (!r.ok) throw new Error(`download ${r.status}`);
+  cloudGen = generation;
+  return JSON.parse(await r.text());
+}
+let uploading = null; let uploadAgain = false;
+async function cloudWrite() {
+  if (!BUCKET) return;
+  if (uploading) { uploadAgain = true; return uploading; }
+  uploading = (async () => {
+    try {
+      do {
+        uploadAgain = false;
+        const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${BUCKET}/o?uploadType=media&name=${OBJECT}`, {
+          method: 'POST', headers: { Authorization: `Bearer ${await gcsToken()}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify([...rooms.values()]),
+        });
+        if (!r.ok) throw new Error(`upload ${r.status} ${await r.text()}`);
+        cloudGen = (await r.json()).generation;
+      } while (uploadAgain);
+    } catch (e) { console.error('Cloud save failed:', e.message); } finally { uploading = null; }
+  })();
+  return uploading;
+}
+
 let saveTimer = null;
+function writeLocal() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify([...rooms.values()]));
+    fs.renameSync(DATA_FILE + '.tmp', DATA_FILE);
+  } catch (e) { console.error('Save failed:', e.message); }
+}
 function save() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify([...rooms.values()]));
-      fs.renameSync(DATA_FILE + '.tmp', DATA_FILE);
-    } catch (e) { console.error('Save failed:', e.message); }
-  }, 1000);
+  saveTimer = setTimeout(() => { saveTimer = null; writeLocal(); cloudWrite(); }, 1000);
 }
+
+async function cloudStart() {
+  if (!BUCKET) return;
+  try {
+    const list = await cloudRead();
+    if (list) console.log(`Loaded ${loadList(list)} room(s) from gs://${BUCKET}.`);
+  } catch (e) { console.error('Cloud load failed:', e.message); }
+  // the server we replace may still save for a little while: pick that up (newer versions win)
+  const until = Date.now() + 3 * 60 * 1000;
+  const poll = setInterval(async () => {
+    if (Date.now() > until) { clearInterval(poll); return; }
+    try {
+      const list = await cloudRead();
+      if (list) { const n = loadList(list); if (n) { console.log(`Picked up ${n} newer room(s) from the previous server.`); save(); } }
+    } catch (e) { console.error('Cloud poll failed:', e.message); }
+  }, 3000);
+}
+
+// Cloud Run sends SIGTERM before stopping this server (deploys, idle shutdown): save now, then end the live
+// feeds so open pages reconnect (to the new server, which has the rooms).
+let stopping = false;
+async function shutdown(sig) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${sig}: saving ${rooms.size} room(s) before stopping.`);
+  clearTimeout(saveTimer); saveTimer = null;
+  writeLocal();
+  await Promise.race([cloudWrite(), new Promise((r) => setTimeout(r, 7000))]);
+  if (uploading) await Promise.race([uploading, new Promise((r) => setTimeout(r, 1500))]);
+  for (const set of streams.values()) for (const c of set) { try { c.res.end(); } catch {} }
+  process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 function newCode() {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -68,7 +168,7 @@ function newCode() {
   }
 }
 
-function broadcast(code) {
+function broadcast(code, persist = true) {
   const g = rooms.get(code);
   const set = streams.get(code);
   if (g && set) {
@@ -78,7 +178,7 @@ function broadcast(code) {
       c.res.write(`data: ${JSON.stringify(G.viewFor(g, c.pid))}\n\n`);
     }
   }
-  save();
+  if (persist) save();
 }
 
 function auth(code, token) {
@@ -251,11 +351,12 @@ setInterval(() => {
 }, 1000);
 
 load();
-server.listen(PORT, () => {
+cloudStart().finally(() => server.listen(PORT, () => {
   console.log(`\nHexhaven is running!  build ${BUILD.commit} · v${BUILD.version} · revision ${BUILD.revision}${BUILD.built ? ` · built ${BUILD.built}` : ''} · node ${BUILD.node}`);
   console.log(`  On this computer:  http://localhost:${PORT}`);
   for (const list of Object.values(os.networkInterfaces())) {
     for (const i of list || []) if (i.family === 'IPv4' && !i.internal) console.log(`  Same Wi-Fi:        http://${i.address}:${PORT}`);
   }
+  if (BUCKET) console.log(`  Rooms are also kept in gs://${BUCKET}`);
   console.log('');
-});
+}));

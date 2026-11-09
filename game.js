@@ -228,9 +228,58 @@ function startGame(game) {
   };
   game.order = { contenders: game.players.map((p) => p.id), rolls: {}, round: 1 };
   game.lastRoll = null; game.rollSeq = 0;
+  game.mapVote = null;
   game.status = 'playing';
   log(game, 'Game started! Everyone rolls — highest roll goes first.');
   startHistory(game);
+}
+
+// ---------- a new map before anyone builds ----------
+// Until the first settlement is placed the island can be rerolled: the host directly, or anyone by calling a
+// vote. More than half saying yes rerolls it, more than half saying no keeps it; a tie leaves it to the host.
+const canRerollMap = (game) => game.status === 'playing' && ['order', 'setup'].includes(game.turn.phase)
+  && !Object.keys(game.buildings).length && !Object.keys(game.roads).length;
+function rerollMap(game) {
+  game.board = buildBoard(boardConfig(game.settings.boardSize, game.players.length));
+  game.bandit = game.board.hexes.find((h) => h.res === 'desert').id;
+  game.mapVote = null;
+  game.mapSeq = (game.mapSeq || 0) + 1;
+}
+function mapTally(game) {
+  const v = game.mapVote; const n = game.players.length;
+  const yes = Object.values(v.votes).filter((x) => x === 1).length;
+  const no = Object.values(v.votes).filter((x) => x === -1).length;
+  return { yes, no, n, tie: yes + no === n && yes === no };
+}
+function mapAction(game, p, a) {
+  if (!canRerollMap(game)) fail('The map can only change before anyone places a piece');
+  const host = p.id === game.hostId;
+  if (a.type === 'rerollMap') {
+    if (!host) fail('Only the host can do that');
+    rerollMap(game);
+    log(game, `🗺️ ${p.name} rerolled the map.`);
+    return;
+  }
+  if (a.type === 'mapDecide') {
+    if (!host) fail('Only the host can do that');
+    if (!game.mapVote || !mapTally(game).tie) fail('There is no tied vote to decide');
+    if (a.reroll) { rerollMap(game); log(game, `🗺️ The vote was tied; ${p.name} chose a new map.`); }
+    else { game.mapVote = null; log(game, `🗺️ The vote was tied; ${p.name} kept this map.`); }
+    return;
+  }
+  // mapVote: value 1 (yes, or call a vote), -1 (no), 0 (take your vote back)
+  const value = Number(a.value);
+  if (![1, -1, 0].includes(value)) fail('Bad action');
+  if (!game.mapVote) {
+    if (value !== 1) fail('There is no vote right now');
+    game.mapVote = { by: p.id, votes: {} };
+    log(game, `🗳️ ${p.name} asks for a new map — vote yes or no.`);
+  }
+  if (value === 0) delete game.mapVote.votes[p.id]; else game.mapVote.votes[p.id] = value;
+  const { yes, no, n } = mapTally(game);
+  if (yes > n / 2) { rerollMap(game); log(game, `🗺️ The majority voted for a new map (${yes} of ${n}).`); }
+  else if (no > n / 2) { game.mapVote = null; log(game, `🗺️ The majority kept this map (${no} of ${n} said no).`); }
+  else if (!yes && !no) game.mapVote = null;
 }
 
 // History = the game as it stood at the start + every move since, so it can be replayed exactly.
@@ -546,7 +595,8 @@ function parseCards(obj) {
 
 // Gameplay moves that go into the history (chat, host hand-offs and lobby actions don't change the game).
 const RECORDED = new Set(['roll', 'discard', 'moveBandit', 'steal', 'buildVillage', 'buildTown', 'buildRoad', 'skipRoads', 'buyScroll',
-  'playScroll', 'bankTrade', 'proposeTrade', 'respondTrade', 'confirmTrade', 'cancelTrade', 'endTurn', 'builderDone', 'skip', ...CROWNS_MOVES]);
+  'playScroll', 'bankTrade', 'proposeTrade', 'respondTrade', 'confirmTrade', 'cancelTrade', 'endTurn', 'builderDone', 'skip',
+  'rerollMap', 'mapVote', 'mapDecide', ...CROWNS_MOVES]);
 let depth = 0; // >0 while a move is being applied, so moves the game makes for someone (auto-play) aren't recorded twice
 
 // Run fn with this game's seeded randomness, restoring whatever was active before.
@@ -607,6 +657,8 @@ function actInner(game, pid, a) {
     if (phases.length && !phases.includes(t.phase)) fail(phaseHint(t.phase));
   };
   const canBuild = () => (isCur && t.phase === 'main') || (t.phase === 'builder' && t.builder === pid);
+
+  if (a.type === 'rerollMap' || a.type === 'mapVote' || a.type === 'mapDecide') { mapAction(game, p, a); return bump(game); }
 
   if (CR.on(game) && CR.handles(a.type)) {
     CR.act(game, p, a, { isCur, mustCur, canBuild });
@@ -1170,7 +1222,8 @@ function viewFor(game, pid) {
       setupNeed: t.phase === 'setup' ? t.setup.need : null,
       setupRound: t.phase === 'setup' ? (t.setup.pos < game.players.length ? 1 : 2) : null,
     },
-    pendingDiscard: game.pendingDiscard, trade: game.trade, stalled: game.status === 'playing' ? stalledPlayers(game) : [],
+    pendingDiscard: game.pendingDiscard, trade: game.trade,
+    map: { canReroll: canRerollMap(game), seq: game.mapSeq || 0, vote: game.mapVote && canRerollMap(game) ? { ...game.mapVote, ...mapTally(game) } : null }, stalled: game.status === 'playing' ? stalledPlayers(game) : [],
     order: game.order ? { contenders: game.order.contenders, rolls: game.order.rolls, round: game.order.round } : null,
     lastRoll: game.lastRoll || null,
     lastSteal: game.lastSteal ? {

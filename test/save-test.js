@@ -19,7 +19,11 @@ function botStep(g) {
   const v = G.viewFor(g, pid); const t = v.turn; const p = g.players.find((x) => x.id === pid);
   if (g.deadline && Math.random() < 0.03) return G.tick(g, Infinity); // the turn timer runs out
   switch (t.phase) {
-    case 'order': case 'preroll': return G.act(g, pid, { type: 'roll' });
+    case 'order':
+      // now and then someone wants a different island: the host rerolls, or the table votes
+      if (Math.random() < 0.15) { const r = Math.random(); const who = pick(g.players).id; if (r < 0.3 ? tryAct(g, g.hostId, { type: 'rerollMap' }) : r < 0.9 ? tryAct(g, who, { type: 'mapVote', value: pick([1, 1, -1, 0]) }) : tryAct(g, g.hostId, { type: 'mapDecide', reroll: Math.random() < 0.5 })) return; }
+      return G.act(g, pid, { type: 'roll' });
+    case 'preroll': return G.act(g, pid, { type: 'roll' });
     case 'setup': return G.act(g, pid, t.setupNeed === 'village' ? { type: 'buildVillage', vertex: pick(v.hints.villages) } : { type: 'buildRoad', edge: pick(v.hints.roads) });
     case 'discard': {
       const n = g.pendingDiscard[pid]; const c = { wood: 0, clay: 0, fleece: 0, wheat: 0, iron: 0 }; const h = { ...p.hand };

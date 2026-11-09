@@ -35,12 +35,13 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v3
 
       # Same settings as the first deploy. --max-instances 1 is required: all game state lives in one server.
+      # ROOMS_BUCKET keeps the rooms in Cloud Storage, so a deploy (or an idle shutdown) doesn't end games.
       # APP_COMMIT / APP_BUILT tell the running server which code it is (shown at /api/version and in the UI).
       - name: Deploy
         run: >
           gcloud run deploy hexhaven --source . --project hexhaven-julian-2026 --region us-central1
           --max-instances 1 --concurrency 1000 --timeout 3600 --quiet
-          --update-env-vars "APP_COMMIT=${{ github.sha }},APP_BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          --update-env-vars "APP_COMMIT=${{ github.sha }},APP_BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ),ROOMS_BUCKET=hexhaven-julian-2026-rooms"
 
       - name: Show the live build
         run: curl -s https://hexhaven-401668287786.us-central1.run.app/api/version
