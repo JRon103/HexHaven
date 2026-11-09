@@ -253,6 +253,25 @@ function soundOn() { try { return localStorage.getItem('hexhaven:mute') !== '1';
 
 // Animations are on by default; the ✨ button in the top bar turns them off (or back on) and the choice is
 // stored per device. CSS reads the result as html.reduce-motion.
+// ---------- light / dark theme ----------
+// Follows the device until the player picks one with the top-bar button; the choice is remembered on this device.
+const darkDevice = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+const themeNow = () => document.documentElement.dataset.theme || (darkDevice() ? 'dark' : 'light');
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('hexhaven:theme', t); } catch {}
+  themeButton();
+}
+function themeButton() {
+  const b = $('#theme');
+  if (!b) return;
+  const dark = themeNow() === 'dark';
+  b.textContent = dark ? '☀️' : '🌙';
+  b.title = dark ? 'Switch to the light theme' : 'Switch to the dark theme';
+  b.setAttribute('aria-label', b.title);
+}
+if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeButton); } catch {} }
+
 function motionOn() { try { return localStorage.getItem('hexhaven:motion') !== 'off'; } catch { return true; } }
 function applyMotion() {
   document.documentElement.classList.toggle('reduce-motion', !motionOn());
@@ -701,6 +720,7 @@ function renderGame(v) {
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
         <div class="dice" id="dice"></div>
         <button class="btn small" id="savebtn" title="Download this game as a save file" hidden>💾 Save</button>
+        <button class="btn small" id="theme"></button>
         <button class="btn small" id="motion" aria-label="Animations">✨</button>
         <button class="btn small" id="mute" title="Sound on/off"></button>
       </header>
@@ -750,6 +770,8 @@ function renderGame(v) {
       toast(motionOn() ? '✨ Animations on' : 'Animations off');
     };
     applyMotion();
+    $('#theme').onclick = () => setTheme(themeNow() === 'dark' ? 'light' : 'dark');
+    themeButton();
     bindChat();
   }
   if (!isBuilding(v) || (CR_MAIN_MODES.includes(S.mode) && !(isMine(v) && v.turn.phase === 'main'))) { S.mode = null; S.cr = null; }

@@ -24,13 +24,19 @@
   --sans: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1b1814; --panel: #26221c; --panel-2: #2f2a22; --ink: #f1e8d8; --muted: #b3a48e;
+  :root:not([data-theme="light"]) { --bg: #1b1814; --panel: #26221c; --panel-2: #2f2a22; --ink: #f1e8d8; --muted: #b3a48e;
     --line: #3d362c; --accent: #d9703f; --sea-1: #24647a; --sea-2: #143f52; --sea-3: #0b2533;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
-    --accent-2: #b8532a; --head-1: #12323d; --head-2: #0a222b;
-  }
+    --accent-2: #b8532a; --head-1: #12323d; --head-2: #0a222b; }
 }
+:root[data-theme="dark"] { --bg: #1b1814; --panel: #26221c; --panel-2: #2f2a22; --ink: #f1e8d8; --muted: #b3a48e;
+    --line: #3d362c; --accent: #d9703f; --sea-1: #24647a; --sea-2: #143f52; --sea-3: #0b2533;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+    --accent-2: #b8532a; --head-1: #12323d; --head-2: #0a222b; }
+/* native controls (selects, scrollbars) follow the theme too */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; } /* beats display rules like .btn { display: inline-flex } */
 html, body { margin: 0; }
@@ -449,27 +455,39 @@ html.reduce-motion :is(.timer.low, .timerbar.low > div) { animation: none; }
 @media (max-width: 520px) { .turnfx-title { font-size: 20px; } .turnfx.mine .turnfx-title { font-size: 24px; } }
 
 /* dark mode: keep the black "7" markers visible */
+/* light tiles keep dark letters */
+/* player names in chat are drawn in their color: lighten it on the dark panel */
+/* no white glow behind the page in the dark */
+/* reds that are readable on a dark panel */
+/* cards you have none of: a lighter plate so the icon still shows */
+/* missing cards on build costs: dimmed, but not gone */
+/* dark emoji (⛏️ ⚔️ ⚖️) get a soft light edge on dark panels */
 @media (prefers-color-scheme: dark) {
-  .stats .bar.seven { background: #e9dfcf; }
-  .rr.seven { background: #e9dfcf; color: #1b1814; }
-  .build:disabled { border-color: #5a4f40; }
-  /* light tiles keep dark letters */
-  .room-code span { color: #2b2118; }
-  /* player names in chat are drawn in their color: lighten it on the dark panel */
-  .log .e.chat > b { filter: brightness(1.35) !important; }
-  /* no white glow behind the page in the dark */
-  body { background: radial-gradient(1100px 600px at 15% -10%, rgba(255,220,170,.06), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(150,110,60,.10), transparent 60%), var(--bg); background-attachment: fixed; }
-  /* reds that are readable on a dark panel */
-  .log .e.seven { color: #ff8f7f; }
-  .stat-table .down { color: #ff9a82; }
-  /* cards you have none of: a lighter plate so the icon still shows */
-  .rcard.zero .ico { background: #4a4135; box-shadow: inset 0 0 0 2px #6b5f4e; filter: grayscale(1) brightness(1.35); opacity: .85; }
-  /* missing cards on build costs: dimmed, but not gone */
-  .build .cost .c.miss, .track .btn .cost .c.miss { opacity: .55; filter: grayscale(1) brightness(1.5); }
-  /* dark emoji (⛏️ ⚔️ ⚖️) get a soft light edge on dark panels */
-  .pl-stats > span, #bankinfo, .tr-ico, .stepper .ico, .respick .ico { filter: drop-shadow(0 0 1px rgba(255, 245, 225, .45)); }
-  .pl.off { opacity: .72; }
+  :root:not([data-theme="light"]) .stats .bar.seven { background: #e9dfcf; }
+  :root:not([data-theme="light"]) .rr.seven { background: #e9dfcf; color: #1b1814; }
+  :root:not([data-theme="light"]) .build:disabled { border-color: #5a4f40; }
+  :root:not([data-theme="light"]) .room-code span { color: #2b2118; }
+  :root:not([data-theme="light"]) .log .e.chat > b { filter: brightness(1.35) !important; }
+  :root:not([data-theme="light"]) body { background: radial-gradient(1100px 600px at 15% -10%, rgba(255,220,170,.06), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(150,110,60,.10), transparent 60%), var(--bg); background-attachment: fixed; }
+  :root:not([data-theme="light"]) .log .e.seven { color: #ff8f7f; }
+  :root:not([data-theme="light"]) .stat-table .down { color: #ff9a82; }
+  :root:not([data-theme="light"]) .rcard.zero .ico { background: #4a4135; box-shadow: inset 0 0 0 2px #6b5f4e; filter: grayscale(1) brightness(1.35); opacity: .85; }
+  :root:not([data-theme="light"]) .build .cost .c.miss, :root:not([data-theme="light"]) .track .btn .cost .c.miss { opacity: .55; filter: grayscale(1) brightness(1.5); }
+  :root:not([data-theme="light"]) .pl-stats > span, :root:not([data-theme="light"]) #bankinfo, :root:not([data-theme="light"]) .tr-ico, :root:not([data-theme="light"]) .stepper .ico, :root:not([data-theme="light"]) .respick .ico { filter: drop-shadow(0 0 1px rgba(255, 245, 225, .45)); }
+  :root:not([data-theme="light"]) .pl.off { opacity: .72; }
 }
+:root[data-theme="dark"] .stats .bar.seven { background: #e9dfcf; }
+:root[data-theme="dark"] .rr.seven { background: #e9dfcf; color: #1b1814; }
+:root[data-theme="dark"] .build:disabled { border-color: #5a4f40; }
+:root[data-theme="dark"] .room-code span { color: #2b2118; }
+:root[data-theme="dark"] .log .e.chat > b { filter: brightness(1.35) !important; }
+:root[data-theme="dark"] body { background: radial-gradient(1100px 600px at 15% -10%, rgba(255,220,170,.06), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(150,110,60,.10), transparent 60%), var(--bg); background-attachment: fixed; }
+:root[data-theme="dark"] .log .e.seven { color: #ff8f7f; }
+:root[data-theme="dark"] .stat-table .down { color: #ff9a82; }
+:root[data-theme="dark"] .rcard.zero .ico { background: #4a4135; box-shadow: inset 0 0 0 2px #6b5f4e; filter: grayscale(1) brightness(1.35); opacity: .85; }
+:root[data-theme="dark"] .build .cost .c.miss, :root[data-theme="dark"] .track .btn .cost .c.miss { opacity: .55; filter: grayscale(1) brightness(1.5); }
+:root[data-theme="dark"] .pl-stats > span, :root[data-theme="dark"] #bankinfo, :root[data-theme="dark"] .tr-ico, :root[data-theme="dark"] .stepper .ico, :root[data-theme="dark"] .respick .ico { filter: drop-shadow(0 0 1px rgba(255, 245, 225, .45)); }
+:root[data-theme="dark"] .pl.off { opacity: .72; }
 
 /* animations toggle in the top bar: dimmed and struck through when off */
 #motion.off { opacity: .55; text-decoration: line-through; filter: grayscale(1); }
@@ -514,7 +532,18 @@ html.reduce-motion :is(.timer.low, .timerbar.low > div) { animation: none; }
 .crt-vs { font-weight: 700; padding: 3px 8px; border-radius: 8px; }
 .crt-vs.good { background: #dff1e4; color: #1d6b3b; }
 .crt-vs.bad { background: #f8dcd8; color: #9a2318; }
-@media (prefers-color-scheme: dark) { .crt-vs.good { background: #1e3a28; color: #9fe0b4; } .crt-vs.bad { background: #47201c; color: #f3b1a9; } .crt-step { background: #24414a; border-color: #36606c; } .crt-step.past { background: #2f6b7c; } .crt-step.isle { background: #5a4a26; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .crt-vs.good { background: #1e3a28; color: #9fe0b4; }
+  :root:not([data-theme="light"]) .crt-vs.bad { background: #47201c; color: #f3b1a9; }
+  :root:not([data-theme="light"]) .crt-step { background: #24414a; border-color: #36606c; }
+  :root:not([data-theme="light"]) .crt-step.past { background: #2f6b7c; }
+  :root:not([data-theme="light"]) .crt-step.isle { background: #5a4a26; }
+}
+:root[data-theme="dark"] .crt-vs.good { background: #1e3a28; color: #9fe0b4; }
+:root[data-theme="dark"] .crt-vs.bad { background: #47201c; color: #f3b1a9; }
+:root[data-theme="dark"] .crt-step { background: #24414a; border-color: #36606c; }
+:root[data-theme="dark"] .crt-step.past { background: #2f6b7c; }
+:root[data-theme="dark"] .crt-step.isle { background: #5a4a26; }
 .crt-note { font-size: 12px; color: var(--muted); }
 .seven-banner.raid { background: #3a2a6b; }
 /* event die */
