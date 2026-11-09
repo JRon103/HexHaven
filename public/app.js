@@ -169,7 +169,7 @@ function renderHome(prefill = '') {
       <div class="hero-text">
         <h1>Hexhaven</h1>
         <p>Settle a hex island, trade with your friends, race to 10 points.</p>
-        <div class="hero-tags"><span>👥 2–8 players</span><span>✨ No sign-up</span><span>🌐 Play in the browser</span></div>
+        <div class="hero-tags"><span>👥 2–8 players</span><span>✨ No sign-up</span><span>🌐 Play in the browser</span>${langButton('btn small hero-lang')}</div>
       </div>
     </div>
     <div class="home-grid">
@@ -468,7 +468,7 @@ function renderLobby(v) {
     <div class="lobby">
       <div class="lobby-head">
         <div><div class="lobby-label">${LOGO_SVG}Room code</div><div class="room-code" aria-label="Room code ${esc(v.code)}">${[...v.code].map((ch) => `<span>${esc(ch)}</span>`).join('')}</div></div>
-        <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button></div>
+        <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button>${langButton('btn')}</div>
       </div>
       <div class="card"><div id="lobby-main"></div></div>
       <div class="card" style="display:flex;flex-direction:column;min-height:320px">
@@ -672,7 +672,7 @@ function renderLog(v) {
     if (l.data && l.data.type === 'harvest') return harvestLine(v, l.data);
     const seven = /rolled 7 \(|^Bandits!/.test(l.msg);
     const cls = l.private ? 'private' : seven ? 'seven' : (l.msg.startsWith('—') ? 'turn' : '');
-    return `<div class="e ${cls}">${decorateLog(v, esc(l.msg))}</div>`;
+    return `<div class="e ${cls}">${decorateLog(v, esc(tr(l.msg)))}</div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
 }
@@ -696,12 +696,12 @@ const whoTag = (v, pid) => {
 function decorateLog(v, html) {
   const players = v.players.map((p) => ({ p, n: esc(p.name) })).sort((a, b) => b.n.length - a.n.length);
   const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const words = [...players.map((x) => reEsc(x.n)), 'Wood', 'Clay', 'Fleece', 'Wheat', 'Iron', 'Parchment', 'Linen', 'Silver'];
+  const words = [...players.map((x) => reEsc(x.n)), ...ALLC.map((r) => tr(RM[r].name))];
   const re = new RegExp(`(^|[^\\p{L}\\p{N}_])(${words.join('|')})(?=$|[^\\p{L}\\p{N}_])`, 'gu');
   return html.replace(re, (m, pre, w) => {
     const pl = players.find((x) => x.n === w);
     if (pl) return `${pre}<span class="who">${chip(pl.p.color)}${w}</span>`;
-    const r = ALLC.find((k) => RM[k].name === w);
+    const r = ALLC.find((k) => tr(RM[k].name) === w);
     return `${pre}${RM[r].ico} ${w}`;
   });
 }
@@ -720,6 +720,7 @@ function renderGame(v) {
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
         <div class="dice" id="dice"></div>
         <button class="btn small" id="savebtn" title="Download this game as a save file" hidden>💾 Save</button>
+        ${langButton()}
         <button class="btn small" id="theme"></button>
         <button class="btn small" id="motion" aria-label="Animations">✨</button>
         <button class="btn small" id="mute" title="Sound on/off"></button>
@@ -1277,7 +1278,7 @@ const POINT_COLS = [
   ['settlements', '🏠', 'Settlements'], ['cities', '🏰', 'Cities'], ['route', '🛤️', 'Grand Route'], ['watch', '🛡️', 'Strongest Watch'],
   ['monuments', '🗿', 'Monuments'], ['capitals', '👑', 'Capitals'], ['defender', '⚔️', 'Defender of the Isle'], ['merchant', '💰', 'Merchant'], ['edicts', '📜', 'Point edicts'],
 ];
-const pointsTitle = (p) => (p.points || []).map((x) => `${x.label}: ${x.count > 1 || x.each > 1 ? `${x.count}×${x.each} = ` : ''}${x.n}`).join(' · ') || 'No points yet';
+const pointsTitle = (p) => (p.points || []).map((x) => `${tr(x.label)}: ${x.count > 1 || x.each > 1 ? `${x.count}×${x.each} = ` : ''}${x.n}`).join(' · ') || tr('No points yet');
 // One row per player, one column per kind of point anyone has; each cell shows count × value.
 function pointsTable(v, ranked) {
   const rows = ranked || v.players.slice().sort((a, b) => (b.vpTotal ?? b.vp) - (a.vpTotal ?? a.vp));

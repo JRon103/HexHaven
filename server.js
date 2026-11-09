@@ -94,6 +94,7 @@ const STATIC = {
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/crowns-ui.js': ['crowns-ui.js', 'text/javascript; charset=utf-8'],
+  '/i18n.js': ['i18n.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   // the rules, notation and save code, so the browser's replay viewer runs the real engine
@@ -126,7 +127,7 @@ const server = http.createServer(async (req, res) => {
         // stamp the build onto the script/style URLs so no browser keeps a cached copy from an older deploy
         const v = encodeURIComponent(BUILD.commit);
         const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8')
-          .replace('href="/style.css"', `href="/style.css?v=${v}"`).replace('src="/app.js"', `src="/app.js?v=${v}"`).replace('src="/crowns-ui.js"', `src="/crowns-ui.js?v=${v}"`);
+          .replace('href="/style.css"', `href="/style.css?v=${v}"`).replace('src="/app.js"', `src="/app.js?v=${v}"`).replace('src="/crowns-ui.js"', `src="/crowns-ui.js?v=${v}"`).replace('src="/i18n.js"', `src="/i18n.js?v=${v}"`);
         return res.end(html);
       }
       return fs.createReadStream(path.join(PUBLIC, file)).pipe(res);
