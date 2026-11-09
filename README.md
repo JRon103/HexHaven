@@ -78,7 +78,7 @@ Pick it under **Game mode** in the lobby. It works with 2–8 players, plays to 
   - ⛵ moves the raiders' ship one step.
   - A gate gives an **edict** from that deck to everyone whose level in the track covers the red die.
 - **Raids.** When the ship arrives (7 steps), the raiders fight with one point per city on the island. Your defense is the total rank of all active wardens. If the wardens win, the strongest player becomes Defender of the Isle (+1). If the raiders win, the players with the weakest wardens each lose a city (it turns back into a settlement). The bandit stays in the dunes until the first raid. The lobby setting **First raid** gives everyone more time before the first landing (7 steps by default; 10, 14 or 21). Later raids always take 7 steps. When the raiders land, a raid scene counts up both sides and shows who defended the isle or who loses a city.
-- **Wardens** cost 🐑⛏️ and stand on corners along your roads. Activate them with 🌾. Active wardens can move, push a weaker opponent warden away, or chase the bandit off. Promote them with 🐑⛏️ up to rank 3.
+- **Wardens** cost 🐑🪨 and stand on corners along your roads. Activate them with 🌾. Active wardens can move, push a weaker opponent warden away, or chase the bandit off. Promote them with 🐑🪨 up to rank 3.
 - **Walls** cost 🧱🧱 and add +2 to your hand limit.
 - **Setup:** your second piece is a city.
 - **Edicts:** 3 decks of 18 cards, each with its rules text in the game. Point edicts count at once.

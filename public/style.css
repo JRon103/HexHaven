@@ -461,7 +461,7 @@ html.reduce-motion :is(.timer.low, .timerbar.low > div) { animation: none; }
 /* reds that are readable on a dark panel */
 /* cards you have none of: a lighter plate so the icon still shows */
 /* missing cards on build costs: dimmed, but not gone */
-/* dark emoji (⛏️ ⚔️ ⚖️) get a soft light edge on dark panels */
+/* dark emoji (🪨 ⚔️ ⚖️) get a soft light edge on dark panels */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .stats .bar.seven { background: #e9dfcf; }
   :root:not([data-theme="light"]) .rr.seven { background: #e9dfcf; color: #1b1814; }

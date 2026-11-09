@@ -7,7 +7,7 @@ const RM = {
   clay:   { name: 'Clay',   ico: '🧱', color: '#c46a3c', card: '#eab394', deep: '#8a3f1e' },
   fleece: { name: 'Fleece', ico: '🐑', color: '#a7cf6c', card: '#d8ecb8', deep: '#5c8a2c' },
   wheat:  { name: 'Wheat',  ico: '🌾', color: '#e2bc45', card: '#f4e0a0', deep: '#94700f' },
-  iron:   { name: 'Iron',   ico: '⛏️', color: '#8b939f', card: '#cfd4db', deep: '#4b535e' },
+  iron:   { name: 'Iron',   ico: '🪨', color: '#8b939f', card: '#cfd4db', deep: '#4b535e' },
   desert: { name: 'Dunes',  ico: '🏜️', color: '#dcc697', deep: '#97804d' },
   parchment: { name: 'Parchment', ico: '📃', card: '#e9dcc0', deep: '#2f7a46' },
   linen:     { name: 'Linen',     ico: '🧵', card: '#f1e3a6', deep: '#9a7a12' },
@@ -207,7 +207,7 @@ function renderHome(prefill = '') {
         <li><span class="step-ico">👥</span><span>With 3+ players, a <b>builder phase</b> after each turn lets everyone else build too, so big games keep moving.</span></li>
       </ul>
       <div class="costs">
-        <span><b>🛤️ Road</b> 🌲🧱</span><span><b>🏠 Settlement</b> 🌲🧱🐑🌾</span><span><b>🏰 City</b> 🌾🌾⛏️⛏️⛏️</span><span><b>📜 Development card</b> 🐑🌾⛏️</span>
+        <span><b>🛤️ Road</b> 🌲🧱</span><span><b>🏠 Settlement</b> 🌲🧱🐑🌾</span><span><b>🏰 City</b> 🌾🌾🪨🪨🪨</span><span><b>📜 Development card</b> 🐑🌾🪨</span>
       </div>
     </div>
     <p class="hint" style="text-align:center;margin-top:18px">${buildTag()}</p>
@@ -1530,7 +1530,7 @@ function renderModal(v) {
       <div class="foot"><span class="hint" style="flex:1">${n === need ? `<b>${n} / ${need}</b> selected — ready` : `${n} / ${need} selected`}</span><button class="btn primary" data-do="discard" ${n === need ? '' : 'disabled'}>Discard</button></div>`;
   } else if (kind === 'cardref') {
     html = `<h2>📜 Development cards</h2>
-      <p class="hint" style="margin:0">Cost 🐑🌾⛏️. You draw a random card. You may play one per turn, before or after rolling, but not on the turn you bought it.</p>
+      <p class="hint" style="margin:0">Cost 🐑🌾🪨. You draw a random card. You may play one per turn, before or after rolling, but not on the turn you bought it.</p>
       <div class="dc-row">${Object.keys(SCROLL_INFO).map((k) => `<div class="devcard ${k}">
         <div class="dc-head"><span class="dc-ico">${SCROLL_INFO[k].ico}</span><b>${esc(v.scrollNames[k])}</b></div>
         <p>${esc(SCROLL_INFO[k].desc)}</p></div>`).join('')}</div>

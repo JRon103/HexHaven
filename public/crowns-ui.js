@@ -294,7 +294,7 @@ function crDockPanel(v, hand) {
   const myW = v.hints.myWardens;
   const wardens = myW.length
     ? `🛡️ ${myW.length} warden${myW.length > 1 ? 's' : ''} · strength <b>${me.strength}</b> active — <span class="hint">click one on the board to activate (🌾), promote, move, push or chase the bandit</span>`
-    : '<span class="hint">🛡️ No wardens yet. Raise one (🐑⛏️) and activate it (🌾) to defend against the raiders.</span>';
+    : '<span class="hint">🛡️ No wardens yet. Raise one (🐑🪨) and activate it (🌾) to defend against the raiders.</span>';
   return `<div class="crpanel">
     <div class="cr-tracks">${tracks}</div>
     <div class="cr-wardens">${wardens}</div>
@@ -361,7 +361,7 @@ function crRulesHtml(v) {
       <li><b>Capitals.</b> The first to level 4 in a track turns one of their cities into its capital (+2 points, safe from raids). The first to level 5 takes it from anyone below 5.</li>
       <li><b>The event die.</b> Each roll also throws an event die, and the second number die is red. ⛵ moves the raiders' ship one step. A gate (${CR_TRACKS.map((k) => CRT[k].ico).join(' ')}) gives an edict from that deck to everyone whose level n in the track covers the red die (1 to n+1).</li>
       <li><b>Raids.</b> When the ship arrives (step 7), the raiders (one per city on the island) fight all active wardens (their ranks added up). If the wardens win, the strongest player is Defender of the Isle (+1 point); a tie draws an edict each. If the raiders win, the players with the weakest wardens each lose a city (it becomes a settlement, and its wall is lost). Then every warden goes inactive. The bandit can't leave the dunes before the first raid.</li>
-      <li><b>Wardens.</b> Raise one (🐑⛏️) on a free corner along your roads, then activate it (🌾). From the next turn an active warden can move along your roads, push a weaker opponent warden away, or chase the bandit off a tile it touches; acting makes it inactive again. Promote with 🐑⛏️: rank 2 Veteran, rank 3 Champion (needs Council level 3). Wardens block roads and settlements like buildings.</li>
+      <li><b>Wardens.</b> Raise one (🐑🪨) on a free corner along your roads, then activate it (🌾). From the next turn an active warden can move along your roads, push a weaker opponent warden away, or chase the bandit off a tile it touches; acting makes it inactive again. Promote with 🐑🪨: rank 2 Veteran, rank 3 Champion (needs Council level 3). Wardens block roads and settlements like buildings.</li>
       <li><b>Walls</b> (🧱🧱) go around your cities: +2 cards each to your hand limit when a 7 is rolled. At most 3.</li>
       <li><b>Edicts</b> replace development cards. Play them on your turn after rolling (Weighted Dice before rolling), as many as you like. You hold at most 4. Point edicts (+1) are revealed at once. Played edicts go back under their deck.</li>
       <li><b>Setup.</b> Your second piece is a city. First to <b>13</b> points wins (unless the host changed it).</li>
