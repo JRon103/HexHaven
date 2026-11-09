@@ -314,21 +314,38 @@ const server = http.createServer(async (req, res) => {
       const client = { res, pid: a.p.id };
       if (!streams.has(a.g.code)) streams.set(a.g.code, new Set());
       streams.get(a.g.code).add(client);
+      a.p.seenAt = Date.now();
       G.setConnected(a.g, a.p.id, true);
       broadcast(a.g.code);
+      const code = a.g.code; const pid = a.p.id;
       req.on('close', () => {
-        const set = streams.get(a.g.code);
-        set.delete(client);
-        const still = [...set].some((c) => c.pid === a.p.id);
-        if (!still && G.setConnected(a.g, a.p.id, false)) broadcast(a.g.code);
+        const set = streams.get(code);
+        if (set) set.delete(client);
+        const still = set && [...set].some((c) => c.pid === pid);
+        const g = rooms.get(code); // the current copy of the room, not the one this feed started with
+        if (g && !still && G.setConnected(g, pid, false)) broadcast(code);
       });
       return;
+    }
+
+    // Open pages say "still here" every 25 s. A feed can look open long after a phone locked or a tab died
+    // (the connection stays up at Cloud Run's edge), so a seat silent for a while counts as offline and can be retaken.
+    if (req.method === 'POST' && url.pathname === '/api/ping') {
+      const body = await readBody(req);
+      const a = auth(body.code, body.token);
+      if (!a) return json(res, 404, { error: 'Session not found' });
+      a.p.seenAt = Date.now();
+      const live = [...(streams.get(a.g.code) || [])].some((c) => c.pid === a.p.id);
+      if (live && G.setConnected(a.g, a.p.id, true)) broadcast(a.g.code, false);
+      return json(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/action') {
       const body = await readBody(req);
       const a = auth(body.code, body.token);
       if (!a) return json(res, 404, { error: 'Session not found' });
+      a.p.seenAt = Date.now();
+      if ([...(streams.get(a.g.code) || [])].some((c) => c.pid === a.p.id)) G.setConnected(a.g, a.p.id, true);
       G.act(a.g, a.p.id, body.action);
       broadcast(a.g.code);
       return json(res, 200, { ok: true });
@@ -341,8 +358,14 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+const SILENT_MS = 75 * 1000; // no "still here" for this long: shown as offline
 setInterval(() => {
   for (const set of streams.values()) for (const c of set) c.res.write(': ping\n\n');
+  for (const [code, g] of rooms) {
+    let changed = false;
+    for (const p of g.players) if (p.connected && Date.now() - (p.seenAt || 0) > SILENT_MS) changed = G.setConnected(g, p.id, false) || changed;
+    if (changed) broadcast(code, false);
+  }
   for (const [code, g] of rooms) {
     if (Date.now() - g.updatedAt > ROOM_TTL && !(streams.get(code) || new Set()).size) rooms.delete(code);
   }

@@ -454,6 +454,8 @@ const ES = {
   'There is no tied vote to decide': 'No hay una votación empatada que decidir', 'There is no vote right now': 'Ahora no hay ninguna votación',
   '👑 Your city': '👑 Tu ciudad', 'Show your city panel': 'Mostrar tu panel de ciudad', 'Hide your city panel': 'Ocultar tu panel de ciudad',
   'rerolled the map': 'generó un mapa nuevo', 'voted on the map': 'votó sobre el mapa', 'decided the map vote': 'decidió la votación del mapa',
+  '· online': '· en línea', 'This seat is online on another device': 'Este asiento está en línea en otro dispositivo',
+  'A seat marked online is still open on another device. Close the game there, or wait about a minute after that device locked or went offline — then refresh this page.': 'Un asiento marcado en línea sigue abierto en otro dispositivo. Cierra el juego ahí, o espera un minuto después de que ese dispositivo se bloquee o pierda conexión — luego recarga esta página.',
   // ---------- pieces of sentences built on the page ----------
   'Rejoin room {*} as {*}': 'Volver a la sala {1} como {2}', '…or join as someone new:': '…o entra como alguien nuevo:',
   '{*} of {*} in favor ·': '{1} de {2} a favor ·', 'selected — ready': 'elegidas — listo', 'saved {*}': 'guardada {1}', 'seat {*}': 'asiento {1}', 'Seat': 'Asiento',

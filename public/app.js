@@ -105,6 +105,13 @@ function connect() {
     }
   };
 }
+function stillHere() {
+  if (!S.code || !S.token || S.replay) return;
+  fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: S.code, token: S.token }) }).catch(() => {});
+}
+setInterval(stillHere, 25000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') stillHere(); });
+
 function setConn(ok) { const el = $('#conn'); if (el) el.textContent = ok ? '' : 'Reconnecting…'; }
 
 // ---------- build / version (for debugging, and to pick up new deploys) ----------
@@ -1865,10 +1872,10 @@ async function offerSeats(code) {
   let info;
   try { info = await api(`/api/room?code=${encodeURIComponent(code)}`); } catch { return false; }
   if (info.status === 'lobby') return false;
-  const free = info.players.filter((p) => !p.connected);
+  const busy = info.players.some((p) => p.connected);
   $('#join-seats').innerHTML = `<div class="hint" style="margin:6px 0">This game is already running — pick your seat:</div>
-    <div class="seatpick">${free.length ? free.map((p) => `<button type="button" class="btn" data-joinseat="${esc(p.name)}" style="--pc:${PC[p.color] || '#999'}">${chip(p.color)} ${esc(p.name)}</button>`).join('')
-      : '<span class="hint">Every seat is taken right now.</span>'}</div>`;
+    <div class="seatpick">${info.players.map((p) => `<button type="button" class="btn" data-joinseat="${esc(p.name)}" style="--pc:${PC[p.color] || '#999'}" ${p.connected ? 'disabled title="This seat is online on another device"' : ''}>${chip(p.color)} ${esc(p.name)}${p.connected ? ' <span class="hint">· online</span>' : ''}</button>`).join('')}</div>
+    ${busy ? '<div class="hint" style="margin-top:6px">A seat marked online is still open on another device. Close the game there, or wait about a minute after that device locked or went offline — then refresh this page.</div>' : ''}`;
   document.querySelectorAll('[data-joinseat]').forEach((b) => {
     b.onclick = async () => {
       try { const r = await api('/api/join', { code, name: b.dataset.joinseat }); enterRoom(r.code, r.token, r.pid, b.dataset.joinseat); }

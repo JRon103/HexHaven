@@ -33,6 +33,7 @@ async function bot(name) {
     }, 500);
   };
   console.log(`${name} joined`);
+  setInterval(() => post('/api/ping', { code, token }).catch(() => {}), 25000); // like an open page: still here
   for await (const chunk of res.body) {
     buf += dec.decode(chunk, { stream: true });
     let i;
