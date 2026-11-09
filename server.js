@@ -93,6 +93,7 @@ async function cloudRead() {
   return JSON.parse(await r.text());
 }
 let uploading = null; let uploadAgain = false;
+let changes = 0; let uploaded = 0; // the bucket is behind while uploaded < changes
 async function cloudWrite() {
   if (!BUCKET) return;
   if (uploading) { uploadAgain = true; return uploading; }
@@ -100,12 +101,14 @@ async function cloudWrite() {
     try {
       do {
         uploadAgain = false;
+        const upTo = changes;
         const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${BUCKET}/o?uploadType=media&name=${OBJECT}`, {
           method: 'POST', headers: { Authorization: `Bearer ${await gcsToken()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify([...rooms.values()]),
         });
         if (!r.ok) throw new Error(`upload ${r.status} ${await r.text()}`);
         cloudGen = (await r.json()).generation;
+        uploaded = upTo;
       } while (uploadAgain);
     } catch (e) { console.error('Cloud save failed:', e.message); } finally { uploading = null; }
   })();
@@ -121,6 +124,7 @@ function writeLocal() {
   } catch (e) { console.error('Save failed:', e.message); }
 }
 function save() {
+  changes++;
   if (saveTimer) return;
   saveTimer = setTimeout(() => { saveTimer = null; writeLocal(); cloudWrite(); }, 1000);
 }
@@ -151,7 +155,8 @@ async function shutdown(sig) {
   console.log(`${sig}: saving ${rooms.size} room(s) before stopping.`);
   clearTimeout(saveTimer); saveTimer = null;
   writeLocal();
-  await Promise.race([cloudWrite(), new Promise((r) => setTimeout(r, 7000))]);
+  // only if this server changed something the bucket doesn't have yet (an idle or test server never overwrites it)
+  if (uploaded < changes) await Promise.race([cloudWrite(), new Promise((r) => setTimeout(r, 7000))]);
   if (uploading) await Promise.race([uploading, new Promise((r) => setTimeout(r, 1500))]);
   for (const set of streams.values()) for (const c of set) { try { c.res.end(); } catch {} }
   process.exit(0);
