@@ -78,7 +78,91 @@ function numberPool(count) {
   return pool;
 }
 
-function buildBoard(cfg) {
+// ---------- balanced islands ----------
+// Like competitive map generators: try many deals (all from the game's seeded randomness, so replays match)
+// and keep the first that breaks none of these, or the one that breaks the fewest:
+//   tiles   no more than 2 tiles of one resource joined together; dunes don't touch each other
+//   numbers 6 and 8 never touch; equal numbers never touch; 2 never touches 12;
+//           no corner where three tiles add up to more than 11 pips (dots under the number);
+//           every resource gets a fair share of the odds (its average pips per tile near the island's average)
+const PIP = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
+function balancedLayout(hexes, vertices, tiles, neighbors) {
+  const nb = hexes.map((h) => neighbors(h).map((o) => o.id));
+  // tiles: the largest group of one resource, and dunes touching dunes
+  const tileFaults = () => {
+    let bad = 0; const seen = new Set();
+    for (const h of hexes) {
+      if (seen.has(h.id)) continue;
+      const stack = [h.id]; let size = 0; seen.add(h.id);
+      while (stack.length) {
+        const x = stack.pop(); size++;
+        for (const y of nb[x]) if (!seen.has(y) && hexes[y].res === h.res) { seen.add(y); stack.push(y); }
+      }
+      if (h.res === 'desert' ? size > 1 : size > 2) bad += size - (h.res === 'desert' ? 1 : 2);
+    }
+    return bad;
+  };
+  // Search by swapping: deal at random, then keep trying swaps of two tiles (or two numbers) and keep each swap
+  // that doesn't make things worse. A few fresh deals guard against getting stuck; the best one found wins.
+  const improve = (items, get, set, faults, rounds) => {
+    let bad = faults();
+    for (let k = 0; k < rounds && bad > 0; k++) {
+      const i = rint(items.length); const j = rint(items.length);
+      const a = get(items[i]); const b = get(items[j]);
+      if (a === b) continue;
+      set(items[i], b); set(items[j], a);
+      const now = faults();
+      if (now <= bad) bad = now; else { set(items[i], a); set(items[j], b); }
+    }
+    return bad;
+  };
+  let bestTiles = null; let bestTileBad = Infinity;
+  for (let deal = 0; deal < 6 && bestTileBad > 0; deal++) {
+    shuffle(tiles); hexes.forEach((h, i) => { h.res = tiles[i]; });
+    const bad = improve(hexes, (h) => h.res, (h, r) => { h.res = r; }, tileFaults, 1500);
+    if (bad < bestTileBad) { bestTileBad = bad; bestTiles = hexes.map((h) => h.res); }
+  }
+  hexes.forEach((h, i) => { h.res = bestTiles[i]; });
+  const land = hexes.filter((h) => h.res !== 'desert');
+  const nums = numberPool(land.length);
+  const avg = nums.reduce((s, n) => s + PIP[n], 0) / nums.length;
+  const corners = vertices.filter((V) => V.hexes.length === 3);
+  const numFaults = () => {
+    let bad = 0;
+    for (const h of land) {
+      for (const y of nb[h.id]) {
+        if (y < h.id) continue; // each pair once
+        const o = hexes[y]; if (!o.num) continue;
+        const red = (n) => n === 6 || n === 8;
+        if (red(h.num) && red(o.num)) bad += 10;      // the one rule that must hold
+        else if (h.num === o.num) bad += 3;
+        else if ((h.num === 2 && o.num === 12) || (h.num === 12 && o.num === 2)) bad += 2;
+      }
+    }
+    for (const V of corners) {
+      const pips = V.hexes.reduce((s, id) => s + (hexes[id].num ? PIP[hexes[id].num] : 0), 0);
+      if (pips > 11) bad += pips - 11;
+    }
+    for (const r of RES) {
+      const mine = land.filter((h) => h.res === r);
+      if (!mine.length) continue;
+      const a = mine.reduce((s, h) => s + PIP[h.num], 0) / mine.length;
+      if (Math.abs(a - avg) > 0.75) bad += Math.ceil((Math.abs(a - avg) - 0.75) * 4);
+    }
+    return bad;
+  };
+  let best = null; let bestBad = Infinity;
+  for (let deal = 0; deal < 8 && bestBad > 0; deal++) {
+    shuffle(nums);
+    land.forEach((h, i) => { h.num = nums[i]; });
+    const bad = improve(land, (h) => h.num, (h, n) => { h.num = n; }, numFaults, 2500);
+    if (bad < bestBad) { bestBad = bad; best = land.map((h) => h.num); }
+  }
+  land.forEach((h, i) => { h.num = best[i]; });
+}
+
+// style: 'balanced' (see above) or 'random' (shuffle; only red numbers kept apart)
+function buildBoard(cfg, style = 'random') {
   const SQ3 = Math.sqrt(3);
   const R = cfg.radius;
   const coords = [];
@@ -124,24 +208,28 @@ function buildBoard(cfg) {
     }
   }
 
-  // resources + numbers (no two red numbers touching)
-  const tiles = [];
-  for (const r of RES) for (let i = 0; i < cfg.res[r]; i++) tiles.push(r);
-  for (let i = 0; i < cfg.deserts; i++) tiles.push('desert');
-  shuffle(tiles);
-  hexes.forEach((h, i) => { h.res = tiles[i]; });
+  // resources + numbers
   const key = (q, r) => `${q},${r}`;
   const byCoord = new Map(hexes.map((h) => [key(h.q, h.r), h]));
   const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
   const neighbors = (h) => DIRS.map(([dq, dr]) => byCoord.get(key(h.q + dq, h.r + dr))).filter(Boolean);
-  const land = hexes.filter((h) => h.res !== 'desert');
-  const nums = numberPool(land.length);
-  for (let attempt = 0; attempt < 2000; attempt++) {
-    shuffle(nums);
-    land.forEach((h, i) => { h.num = nums[i]; });
-    const bad = land.some((h) => (h.num === 6 || h.num === 8) &&
-      neighbors(h).some((o) => o.num === 6 || o.num === 8));
-    if (!bad) break;
+  const tiles = [];
+  for (const r of RES) for (let i = 0; i < cfg.res[r]; i++) tiles.push(r);
+  for (let i = 0; i < cfg.deserts; i++) tiles.push('desert');
+  if (style === 'balanced') balancedLayout(hexes, vertices, tiles, neighbors);
+  else {
+    // random: shuffle the tiles, then the numbers until no two red numbers (6, 8) touch
+    shuffle(tiles);
+    hexes.forEach((h, i) => { h.res = tiles[i]; });
+    const land = hexes.filter((h) => h.res !== 'desert');
+    const nums = numberPool(land.length);
+    for (let attempt = 0; attempt < 2000; attempt++) {
+      shuffle(nums);
+      land.forEach((h, i) => { h.num = nums[i]; });
+      const bad = land.some((h) => (h.num === 6 || h.num === 8) &&
+        neighbors(h).some((o) => o.num === 6 || o.num === 8));
+      if (!bad) break;
+    }
   }
 
   // harbors spaced evenly around the coast
@@ -165,7 +253,7 @@ function buildBoard(cfg) {
 function createGame(code) {
   return {
     code, createdAt: Date.now(), updatedAt: Date.now(), status: 'lobby', hostId: null,
-    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false, firstRaid: 7 },
+    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false, firstRaid: 7, mapStyle: 'balanced' },
     players: [], log: [], logSeq: 0, version: 0, rng: { s: newSeed() },
   };
 }
@@ -208,7 +296,7 @@ function startGame(game) {
     p.hand = emptyHand(); p.scrolls = []; p.guards = 0; p.roadLen = 0;
     p.pieces = { ...PIECES };
   }
-  game.board = buildBoard(cfg);
+  game.board = buildBoard(cfg, game.settings.mapStyle);
   game.bank = emptyHand(); for (const r of RES) game.bank[r] = cfg.bank;
   if (game.settings.mode === 'crowns') CR.setup(game, cfg); else delete game.cr;
   game.deck = [];
@@ -240,7 +328,7 @@ function startGame(game) {
 const canRerollMap = (game) => game.status === 'playing' && ['order', 'setup'].includes(game.turn.phase)
   && !Object.keys(game.buildings).length && !Object.keys(game.roads).length;
 function rerollMap(game) {
-  game.board = buildBoard(boardConfig(game.settings.boardSize, game.players.length));
+  game.board = buildBoard(boardConfig(game.settings.boardSize, game.players.length), game.settings.mapStyle);
   game.bandit = game.board.hexes.find((h) => h.res === 'desert').id;
   game.mapVote = null;
   game.mapSeq = (game.mapSeq || 0) + 1;
@@ -1082,6 +1170,7 @@ function cleanSettings(s) {
   if (s.friendlyBandit !== undefined) out.friendlyBandit = !!s.friendlyBandit;
   if (s.turnTimer !== undefined && [0, 60, 90, 120, 180].includes(Number(s.turnTimer))) out.turnTimer = Number(s.turnTimer);
   if (['auto', 'small', 'large'].includes(s.boardSize)) out.boardSize = s.boardSize;
+  if (['balanced', 'random'].includes(s.mapStyle)) out.mapStyle = s.mapStyle;
   if (s.firstRaid !== undefined && CR.FIRST_RAID.includes(Number(s.firstRaid))) out.firstRaid = Number(s.firstRaid);
   return out;
 }
@@ -1095,6 +1184,7 @@ const SETTING_LABEL = {
   turnTimer: (v) => `turn timer ${v ? `${v / 60} min` : 'off'}`,
   friendlyBandit: (v) => `friendly bandit ${v ? 'on' : 'off'}`,
   firstRaid: (v) => `first raid after ${v} ship steps`,
+  mapStyle: (v) => `${v} map`,
 };
 function describeChanges(game, changes) {
   return Object.entries(changes).map(([k, v]) => SETTING_LABEL[k](v)).join(', ');

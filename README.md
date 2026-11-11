@@ -89,6 +89,7 @@ On wide screens your improvements, wardens and edicts sit in a see-through **cit
 
 ## Quality of life
 
+- **Balanced maps** (lobby setting **Map**, on by default): 6 and 8, equal numbers, and 2 and 12 never touch; no corner adds up to more than 11 pips; at most 2 tiles of one resource sit together; and every resource gets a fair share of the odds. **Random** shuffles freely (only 6 and 8 kept apart). Both use the game's seed, so replays match.
 - **New map:** before anyone places a piece, the host can click **🗺️ New map**, and anyone else can **ask for a new map**. Everyone votes 👍/👎: more than half decides, and on a tie the host chooses. Rerolls are part of the history, so replays show them too.
 - **Settings suggestions:** in the lobby anyone can change a setting. For non-hosts that makes a draft they can send to the host as a suggestion. Everyone can vote 👍/👎, and the host applies or dismisses it; votes never change settings by themselves.
 

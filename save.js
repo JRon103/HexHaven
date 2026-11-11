@@ -213,7 +213,8 @@ function decodeSnapshot(snap, code = 'SAVE') {
   const T = snap.turn || {};
   Object.assign(game, {
     status: snap.status === 'over' || snap.winner ? 'over' : 'playing',
-    settings: { ...game.settings, ...(snap.settings || {}) },
+    // saves from before map styles existed were dealt at random: keep it so their rerolls replay the same
+    settings: { ...game.settings, mapStyle: 'random', ...(snap.settings || {}) },
     players: ordered, hostId: idOf(snap.host) || ordered[0].id, board,
     bank: uncards(snap.bank), deck: snap.devDeck ? String(snap.devDeck).trim().split(/\s+/) : [],
     bandit: snap.map.bandit ? geo.tileId(snap.map.bandit) : board.hexes.find((h) => h.res === 'desert').id,

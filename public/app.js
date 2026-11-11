@@ -538,6 +538,14 @@ function renderLobby(v) {
           <option value="small" ${val('boardSize') === 'small' ? 'selected' : ''}>Small — 19 tiles (best for 2–4)</option>
           <option value="large" ${val('boardSize') === 'large' ? 'selected' : ''}>Large — 37 tiles (best for 5–8)</option>
         </select></label>
+      <label class="field${chg('mapStyle')}">Map
+        <select id="s-map">
+          <option value="balanced" ${val('mapStyle') !== 'random' ? 'selected' : ''}>Balanced — fair numbers, no clumps (recommended)</option>
+          <option value="random" ${val('mapStyle') === 'random' ? 'selected' : ''}>Random — anything goes (only 6 and 8 kept apart)</option>
+        </select>
+        <span class="hint" style="font-weight:400">${val('mapStyle') === 'random'
+          ? 'Tiles and numbers are shuffled freely: equal numbers can touch and a resource can end up on weak numbers.'
+          : 'Equal numbers never touch, 2 never touches 12, no corner is too strong, at most 2 tiles of a resource together, and every resource gets a fair share of the odds.'}</span></label>
       <label class="field${chg('discardLimit')}">Hand limit when a 7 is rolled
         <input type="number" min="5" max="12" id="s-discard" value="${val('discardLimit')}"></label>
       <label class="toggle${chg('builderPhase')}"><input type="checkbox" id="s-builder" ${val('builderPhase') ? 'checked' : ''}>
@@ -576,6 +584,7 @@ function renderLobby(v) {
     $('#s-vp').onchange = (e) => upd({ vpTarget: Math.max(5, Math.min(20, Math.round(Number(e.target.value)) || 10)) });
     $('#s-discard').onchange = (e) => upd({ discardLimit: Math.max(5, Math.min(12, Math.round(Number(e.target.value)) || 7)) });
     $('#s-size').onchange = (e) => upd({ boardSize: e.target.value });
+    $('#s-map').onchange = (e) => upd({ mapStyle: e.target.value });
     $('#s-builder').onchange = (e) => upd({ builderPhase: e.target.checked });
     $('#s-timer').onchange = (e) => upd({ turnTimer: Number(e.target.value) });
     $('#s-friendly').onchange = (e) => upd({ friendlyBandit: e.target.checked });
@@ -600,6 +609,7 @@ function renderLobby(v) {
 const SETTING_TEXT = {
   mode: ['Mode', (x) => (x === 'crowns' ? 'Crowns & Raiders' : 'Classic')],
   firstRaid: ['First raid after', (x) => `${x || 7} steps`],
+  mapStyle: ['Map', (x) => (x === 'random' ? 'random' : 'balanced')],
   vpTarget: ['Points to win', (x) => x],
   boardSize: ['Island', (x) => x],
   discardLimit: ['Hand limit', (x) => x],
