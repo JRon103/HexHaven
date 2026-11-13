@@ -106,7 +106,7 @@ for (let i = 0; i < GAMES; i++) {
   const g = G.createGame('TEST');
   const players = [];
   for (let k = 0; k < N; k++) players.push(G.addPlayer(g, 'Bot' + k));
-  G.act(g, players[0].id, { type: 'settings', settings: { friendlyBandit: i % 2 === 0, turnTimer: i % 3 === 0 ? 60 : 0 } });
+  G.act(g, players[0].id, { type: 'settings', settings: { friendlyBandit: i % 2 === 0, turnTimer: i % 3 === 0 ? 60 : 0, fog: i % 4 === 1 } });
   G.act(g, players[0].id, { type: 'start' });
   const bankSize = g.bank.wood;
   let s = 0;

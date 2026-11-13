@@ -162,7 +162,7 @@ function balancedLayout(hexes, vertices, tiles, neighbors) {
 }
 
 // style: 'balanced' (see above) or 'random' (shuffle; only red numbers kept apart)
-function buildBoard(cfg, style = 'random') {
+function buildBoard(cfg, style = 'random', fogged = false) {
   const SQ3 = Math.sqrt(3);
   const R = cfg.radius;
   const coords = [];
@@ -208,7 +208,29 @@ function buildBoard(cfg, style = 'random') {
     }
   }
 
-  // resources + numbers
+  // resources + numbers (with the fog modifier the island stays covered: they're dealt when it lifts)
+  if (fogged) for (const h of hexes) { h.res = 'fog'; h.num = null; }
+  else dealTiles({ hexes, vertices }, cfg, style);
+
+  // harbors spaced evenly around the coast
+  const outer = edges.filter((e) => e.hexes.length === 1).map((e) => {
+    const A = vertices[e.a]; const B = vertices[e.b];
+    return { e, mx: (A.x + B.x) / 2, my: (A.y + B.y) / 2 };
+  }).sort((p, q) => Math.atan2(p.my, p.mx) - Math.atan2(q.my, q.mx));
+  const types = shuffle(cfg.harbors.slice());
+  const offset = rint(outer.length);
+  const harbors = types.map((type, i) => {
+    const o = outer[(offset + Math.floor((i * outer.length) / types.length)) % outer.length];
+    const h = hexes[o.e.hexes[0]];
+    vertices[o.e.a].harbor = type; vertices[o.e.b].harbor = type;
+    return { edge: o.e.id, type, x: r3(h.x + (o.mx - h.x) * 1.55), y: r3(h.y + (o.my - h.y) * 1.55) };
+  });
+  return { radius: R, hexes, vertices, edges, harbors };
+}
+
+// Deal resources and numbers onto an island (its shape and harbors already exist).
+function dealTiles(board, cfg, style) {
+  const { hexes, vertices } = board;
   const key = (q, r) => `${q},${r}`;
   const byCoord = new Map(hexes.map((h) => [key(h.q, h.r), h]));
   const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
@@ -232,20 +254,6 @@ function buildBoard(cfg, style = 'random') {
     }
   }
 
-  // harbors spaced evenly around the coast
-  const outer = edges.filter((e) => e.hexes.length === 1).map((e) => {
-    const A = vertices[e.a]; const B = vertices[e.b];
-    return { e, mx: (A.x + B.x) / 2, my: (A.y + B.y) / 2 };
-  }).sort((p, q) => Math.atan2(p.my, p.mx) - Math.atan2(q.my, q.mx));
-  const types = shuffle(cfg.harbors.slice());
-  const offset = rint(outer.length);
-  const harbors = types.map((type, i) => {
-    const o = outer[(offset + Math.floor((i * outer.length) / types.length)) % outer.length];
-    const h = hexes[o.e.hexes[0]];
-    vertices[o.e.a].harbor = type; vertices[o.e.b].harbor = type;
-    return { edge: o.e.id, type, x: r3(h.x + (o.mx - h.x) * 1.55), y: r3(h.y + (o.my - h.y) * 1.55) };
-  });
-  return { radius: R, hexes, vertices, edges, harbors };
 }
 
 // ---------- lobby ----------
@@ -253,7 +261,7 @@ function buildBoard(cfg, style = 'random') {
 function createGame(code) {
   return {
     code, createdAt: Date.now(), updatedAt: Date.now(), status: 'lobby', hostId: null,
-    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false, firstRaid: 7, mapStyle: 'balanced' },
+    settings: { mode: 'classic', vpTarget: 10, builderPhase: false, discardLimit: 7, boardSize: 'auto', turnTimer: 0, friendlyBandit: false, firstRaid: 7, mapStyle: 'balanced', fog: false },
     players: [], log: [], logSeq: 0, version: 0, rng: { s: newSeed() },
   };
 }
@@ -296,13 +304,14 @@ function startGame(game) {
     p.hand = emptyHand(); p.scrolls = []; p.guards = 0; p.roadLen = 0;
     p.pieces = { ...PIECES };
   }
-  game.board = buildBoard(cfg, game.settings.mapStyle);
+  game.board = buildBoard(cfg, game.settings.mapStyle, !!game.settings.fog);
+  game.fogPayouts = [];
   game.bank = emptyHand(); for (const r of RES) game.bank[r] = cfg.bank;
   if (game.settings.mode === 'crowns') CR.setup(game, cfg); else delete game.cr;
   game.deck = [];
   for (const [k, c] of Object.entries(cfg.deck)) for (let i = 0; i < c; i++) game.deck.push(k);
   shuffle(game.deck);
-  game.bandit = game.board.hexes.find((h) => h.res === 'desert').id;
+  game.bandit = desertId(game.board);
   game.buildings = {}; game.roads = {};
   game.longestHolder = null; game.armyHolder = null;
   game.pendingDiscard = {}; game.trade = null; game.winner = null;
@@ -322,14 +331,36 @@ function startGame(game) {
   startHistory(game);
 }
 
+// ---------- the fog modifier ----------
+// The island starts covered: only its shape and harbors exist. The tiles and numbers are dealt (from the game's
+// seed) when the last starting road is placed, so there is nothing to peek at before then, not even in the
+// data the server sends. Second starting settlements collect at that moment.
+const isFogged = (game) => !!(game.board && game.board.hexes.some((h) => h.res === 'fog'));
+const desertId = (board) => { const d = board.hexes.find((h) => h.res === 'desert'); return d ? d.id : null; };
+function setupPayout(game, p, v) {
+  const got = emptyHand();
+  for (const hid of game.board.vertices[v].hexes) {
+    const h = game.board.hexes[hid];
+    if (RES.includes(h.res) && game.bank[h.res] > 0) { got[h.res]++; game.bank[h.res]--; p.hand[h.res]++; }
+  }
+  log(game, `${p.name} collects ${fmtRes(got)}.`, null, { type: 'harvest', gains: { [p.id]: got }, setup: true });
+}
+function liftFog(game) {
+  dealTiles(game.board, boardConfig(game.settings.boardSize, game.players.length), game.settings.mapStyle);
+  game.bandit = desertId(game.board);
+  log(game, '🌫️ The fog lifts! The island is revealed.', null, { type: 'fog' });
+  for (const { pid, v } of game.fogPayouts || []) { const p = P(game, pid); if (p && game.buildings[v]) setupPayout(game, p, v); }
+  game.fogPayouts = [];
+}
+
 // ---------- a new map before anyone builds ----------
 // Until the first settlement is placed the island can be rerolled: the host directly, or anyone by calling a
 // vote. More than half saying yes rerolls it, more than half saying no keeps it; a tie leaves it to the host.
 const canRerollMap = (game) => game.status === 'playing' && ['order', 'setup'].includes(game.turn.phase)
   && !Object.keys(game.buildings).length && !Object.keys(game.roads).length;
 function rerollMap(game) {
-  game.board = buildBoard(boardConfig(game.settings.boardSize, game.players.length), game.settings.mapStyle);
-  game.bandit = game.board.hexes.find((h) => h.res === 'desert').id;
+  game.board = buildBoard(boardConfig(game.settings.boardSize, game.players.length), game.settings.mapStyle, !!game.settings.fog);
+  game.bandit = desertId(game.board);
   game.mapVote = null;
   game.mapSeq = (game.mapSeq || 0) + 1;
 }
@@ -812,12 +843,8 @@ function actInner(game, pid, a) {
         if (asCity) p.pieces.town--; else p.pieces.village--;
         log(game, `${p.name} placed a ${asCity ? 'city' : 'settlement'}.`);
         if (t.setup.pos >= game.players.length) {
-          const got = emptyHand();
-          for (const hid of game.board.vertices[v].hexes) {
-            const h = game.board.hexes[hid];
-            if (h.res !== 'desert' && game.bank[h.res] > 0) { got[h.res]++; game.bank[h.res]--; p.hand[h.res]++; }
-          }
-          log(game, `${p.name} collects ${fmtRes(got)}.`, null, { type: 'harvest', gains: { [p.id]: got }, setup: true });
+          if (isFogged(game)) (game.fogPayouts = game.fogPayouts || []).push({ pid, v });
+          else setupPayout(game, p, v);
         }
         t.setup.need = 'road'; t.setup.last = v;
         break;
@@ -854,6 +881,7 @@ function actInner(game, pid, a) {
         t.setup.pos++;
         const n = game.players.length;
         if (t.setup.pos >= 2 * n) {
+          if (isFogged(game)) liftFog(game);
           t.idx = 0; t.number = 1; t.phase = 'preroll';
           log(game, `Setup complete! ${current(game).name} rolls first.`);
         } else {
@@ -1171,6 +1199,7 @@ function cleanSettings(s) {
   if (s.turnTimer !== undefined && [0, 60, 90, 120, 180].includes(Number(s.turnTimer))) out.turnTimer = Number(s.turnTimer);
   if (['auto', 'small', 'large'].includes(s.boardSize)) out.boardSize = s.boardSize;
   if (['balanced', 'random'].includes(s.mapStyle)) out.mapStyle = s.mapStyle;
+  if (s.fog !== undefined) out.fog = !!s.fog;
   if (s.firstRaid !== undefined && CR.FIRST_RAID.includes(Number(s.firstRaid))) out.firstRaid = Number(s.firstRaid);
   return out;
 }
@@ -1185,6 +1214,7 @@ const SETTING_LABEL = {
   friendlyBandit: (v) => `friendly bandit ${v ? 'on' : 'off'}`,
   firstRaid: (v) => `first raid after ${v} ship steps`,
   mapStyle: (v) => `${v} map`,
+  fog: (v) => `fog ${v ? 'on' : 'off'}`,
 };
 function describeChanges(game, changes) {
   return Object.entries(changes).map(([k, v]) => SETTING_LABEL[k](v)).join(', ');
@@ -1313,6 +1343,7 @@ function viewFor(game, pid) {
       setupRound: t.phase === 'setup' ? (t.setup.pos < game.players.length ? 1 : 2) : null,
     },
     pendingDiscard: game.pendingDiscard, trade: game.trade,
+    fog: isFogged(game),
     map: { canReroll: canRerollMap(game), seq: game.mapSeq || 0, vote: game.mapVote && canRerollMap(game) ? { ...game.mapVote, ...mapTally(game) } : null }, stalled: game.status === 'playing' ? stalledPlayers(game) : [],
     order: game.order ? { contenders: game.order.contenders, rolls: game.order.rolls, round: game.order.round } : null,
     lastRoll: game.lastRoll || null,

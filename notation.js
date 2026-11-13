@@ -14,7 +14,7 @@ const COM = ['parchment', 'linen', 'silver'];
 const CARDS = [...RES, ...COM];
 const CORNER = ['N', 'NE', 'SE', 'S', 'SW', 'NW'];
 const SIDE = ['NE', 'E', 'SE', 'SW', 'W', 'NW'];
-const TILE = { wood: 'Wo', clay: 'Cl', fleece: 'Fl', wheat: 'Wh', iron: 'Ir', desert: 'De' };
+const TILE = { wood: 'Wo', clay: 'Cl', fleece: 'Fl', wheat: 'Wh', iron: 'Ir', desert: 'De', fog: 'Fo' };
 const TILE_BACK = Object.fromEntries(Object.entries(TILE).map(([k, v]) => [v, k]));
 const CARD = { wood: 'Wo', clay: 'Cl', fleece: 'Fl', wheat: 'Wh', iron: 'Ir', parchment: 'Pa', linen: 'Li', silver: 'Si' };
 const CARD_BACK = Object.fromEntries(Object.entries(CARD).map(([k, v]) => [v, k]));

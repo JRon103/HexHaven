@@ -43,7 +43,7 @@ function encodeSnapshot(game) {
       size: game.board.radius,
       tiles: geo.rows.map((row) => row.map((h) => TILE[h.res] + (h.num || '')).join(' ')),
       harbors: game.board.harbors.map((hb) => `${hb.type === 'any' ? '3:1' : '2:1 ' + hb.type} @ ${geo.side(hb.edge)}`),
-      bandit: geo.tile(game.bandit),
+      bandit: game.bandit === null || game.bandit === undefined ? null : geo.tile(game.bandit),
     },
     pieces,
     bank: cards(game.bank),
@@ -57,6 +57,7 @@ function encodeSnapshot(game) {
     },
     ...(t.phase === 'order' && game.order ? { rollOff: { waiting: game.order.contenders.map(seatOf), rolls: seatMap(game.order.rolls), round: game.order.round } } : {}),
     awards: { longestRoad: seatOf(game.longestHolder), largestArmy: seatOf(game.armyHolder) },
+    ...(game.fogPayouts && game.fogPayouts.length ? { fogPayouts: game.fogPayouts.map((x) => ({ seat: seatOf(x.pid), at: geo.corner(x.v) })) } : {}),
     pendingDiscard: seatMap(game.pendingDiscard),
     rolls: game.rollHistory.map((r) => `${seatOf(r.by)}:${r.d[0]}+${r.d[1]}`).join(' '),
     harvested: seatMap(game.produced),
@@ -193,8 +194,8 @@ function decodeSnapshot(snap, code = 'SAVE') {
     codes.forEach((code, ci) => {
       const res = TILE_BACK[code.slice(0, 2)]; const num = code.length > 2 ? Number(code.slice(2)) : null;
       if (!res) fail(`Map row ${ri + 1}: unknown tile "${code}"`);
-      if (res === 'desert' ? num !== null : !(num >= 2 && num <= 12 && num !== 7)) fail(`Map row ${ri + 1}: "${code}" needs a number 2–12 except 7 (dunes have none)`);
-      row[ci].res = res; row[ci].num = res === 'desert' ? null : num;
+      if (res === 'desert' || res === 'fog' ? num !== null : !(num >= 2 && num <= 12 && num !== 7)) fail(`Map row ${ri + 1}: "${code}" needs a number 2–12 except 7 (dunes have none)`);
+      row[ci].res = res; row[ci].num = res === 'desert' || res === 'fog' ? null : num;
     });
   });
   for (const V of board.vertices) V.harbor = null;
@@ -217,12 +218,13 @@ function decodeSnapshot(snap, code = 'SAVE') {
     settings: { ...game.settings, mapStyle: 'random', ...(snap.settings || {}) },
     players: ordered, hostId: idOf(snap.host) || ordered[0].id, board,
     bank: uncards(snap.bank), deck: snap.devDeck ? String(snap.devDeck).trim().split(/\s+/) : [],
-    bandit: snap.map.bandit ? geo.tileId(snap.map.bandit) : board.hexes.find((h) => h.res === 'desert').id,
+    bandit: snap.map.bandit ? geo.tileId(snap.map.bandit) : (board.hexes.find((h) => h.res === 'desert') || { id: null }).id,
     buildings: {}, roads: {}, trade: null,
     longestHolder: idOf(snap.awards && snap.awards.longestRoad), armyHolder: idOf(snap.awards && snap.awards.largestArmy),
     winner: idOf(snap.winner), lastRoll: null, rollSeq: 0, lastSteal: null, suggestions: [], order: null,
   });
   game.pendingDiscard = {};
+  game.fogPayouts = (snap.fogPayouts || []).map((x) => ({ pid: idOf(x.seat), v: geo.cornerId(x.at) }));
   for (const p of ordered) { const n = snap.pendingDiscard && snap.pendingDiscard[p.seat]; if (n) game.pendingDiscard[p.id] = Number(n); }
   game.produced = {};
   for (const [s, n] of Object.entries(snap.harvested || {})) game.produced[idOf(s)] = Number(n);

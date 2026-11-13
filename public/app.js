@@ -9,6 +9,7 @@ const RM = {
   wheat:  { name: 'Wheat',  ico: '🌾', color: '#e2bc45', card: '#f4e0a0', deep: '#94700f' },
   iron:   { name: 'Iron',   ico: '🪨', color: '#8b939f', card: '#cfd4db', deep: '#4b535e' },
   desert: { name: 'Dunes',  ico: '🏜️', color: '#dcc697', deep: '#97804d' },
+  fog:    { name: 'Fog',    ico: '🌫️', color: '#9aabb4', deep: '#566872' },
   parchment: { name: 'Parchment', ico: '📃', card: '#e9dcc0', deep: '#2f7a46' },
   linen:     { name: 'Linen',     ico: '🧵', card: '#f1e3a6', deep: '#9a7a12' },
   silver:    { name: 'Silver',    ico: '🪙', card: '#d6dcea', deep: '#34558f' },
@@ -548,6 +549,9 @@ function renderLobby(v) {
           : 'Equal numbers never touch, 2 never touches 12, no corner is too strong, at most 2 tiles of a resource together, and every resource gets a fair share of the odds.'}</span></label>
       <label class="field${chg('discardLimit')}">Hand limit when a 7 is rolled
         <input type="number" min="5" max="12" id="s-discard" value="${val('discardLimit')}"></label>
+      <h4 class="mods-title">Modifiers <span class="hint">twists you can add to either mode</span></h4>
+      <label class="toggle${chg('fog')}"><input type="checkbox" id="s-fog" ${val('fog') ? 'checked' : ''}>
+        <span><b>🌫️ Fog</b><br><span class="hint">The island starts hidden: you place your starting pieces seeing only the harbors. The tiles and numbers are dealt when the last starting road is placed, and second settlements collect then.</span></span></label>
       <label class="toggle${chg('builderPhase')}"><input type="checkbox" id="s-builder" ${val('builderPhase') ? 'checked' : ''}>
         <span><b>Builder phase</b><br><span class="hint">After each turn, the other players may build (no trading). Recommended for 5+ players.</span></span></label>
       <label class="field${chg('turnTimer')}">Turn timer
@@ -585,6 +589,7 @@ function renderLobby(v) {
     $('#s-discard').onchange = (e) => upd({ discardLimit: Math.max(5, Math.min(12, Math.round(Number(e.target.value)) || 7)) });
     $('#s-size').onchange = (e) => upd({ boardSize: e.target.value });
     $('#s-map').onchange = (e) => upd({ mapStyle: e.target.value });
+    $('#s-fog').onchange = (e) => upd({ fog: e.target.checked });
     $('#s-builder').onchange = (e) => upd({ builderPhase: e.target.checked });
     $('#s-timer').onchange = (e) => upd({ turnTimer: Number(e.target.value) });
     $('#s-friendly').onchange = (e) => upd({ friendlyBandit: e.target.checked });
@@ -610,6 +615,7 @@ const SETTING_TEXT = {
   mode: ['Mode', (x) => (x === 'crowns' ? 'Crowns & Raiders' : 'Classic')],
   firstRaid: ['First raid after', (x) => `${x || 7} steps`],
   mapStyle: ['Map', (x) => (x === 'random' ? 'random' : 'balanced')],
+  fog: ['Fog', (x) => (x ? 'on' : 'off')],
   vpTarget: ['Points to win', (x) => x],
   boardSize: ['Island', (x) => x],
   discardLimit: ['Hand limit', (x) => x],
@@ -748,6 +754,7 @@ function renderGame(v) {
         <div class="fx" id="fx" aria-live="polite"></div>
         <div class="timerbar" id="timerbar" hidden aria-hidden="true"><div></div></div>
         <div class="seven-banner" id="seven-banner" role="status" hidden></div>
+        <div class="fog-banner" id="fog-banner" role="status" hidden><b>🌫️ Fog</b><span>The island is hidden until everyone has placed their starting pieces — only the harbors show.</span></div>
         <div class="left-stack" id="left-stack">
           <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
           <div class="map-vote" id="map-vote" role="region" aria-label="Map vote" hidden></div>
@@ -806,6 +813,7 @@ function renderGame(v) {
   renderPlayers(v);
   renderTrade(v);
   renderMapVote(v);
+  $('#fog-banner').hidden = !(v.fog && v.status === 'playing');
   renderStats(v);
   renderLog(v);
   renderModal(v);
@@ -1012,6 +1020,10 @@ function renderBoardStatic(v) {
     const cx = hx.x * U, cy = hx.y * U;
     out += `<circle cx="${cx}" cy="${cy - 24}" r="14" fill="#fffaf0" stroke="${RM[hx.res].deep}" stroke-width="2.5" filter="url(#plate-shadow)"/>`;
     out += `<text x="${cx}" y="${cy - 23}" font-size="17" text-anchor="middle" dominant-baseline="central">${RM[hx.res].ico}</text>`;
+    if (hx.res === 'fog') { // hidden until the fog lifts
+      out += `<circle cx="${cx}" cy="${cy + 9}" r="17.5" fill="#dfe6ea" stroke="#566872" stroke-width="1.5" filter="url(#plate-shadow)"/>`;
+      out += `<text x="${cx}" y="${cy + 10}" font-size="18" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="#566872">?</text>`;
+    }
     if (hx.num) {
       const red = hx.num === 6 || hx.num === 8;
       out += `<circle cx="${cx}" cy="${cy + 9}" r="17.5" fill="url(#token)" stroke="#9c825a" stroke-width="1.5" filter="url(#plate-shadow)"/>`;
@@ -1031,6 +1043,9 @@ function renderBoardStatic(v) {
     }
   }
   $('#g-static').innerHTML = out;
+  if (S.wasFog === v.code && !v.fog && motionOn()) { const g = $('#g-static'); g.classList.remove('reveal'); void g.getBBox(); g.classList.add('reveal'); }
+  if (S.wasFog === v.code && !v.fog && !S.replay) toast('🌫️ The fog lifts! The island is revealed.');
+  S.wasFog = v.fog ? v.code : null; // remember per room, so another room never "lifts"
   $('#legend').innerHTML = RES.map((r) => `<span>${RM[r].ico} ${RM[r].name}</span>`).join('') + '<span>⚓ 3:1 any · 2:1 shown</span>';
 }
 

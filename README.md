@@ -85,10 +85,11 @@ Pick it under **Game mode** in the lobby. It works with 2–8 players, plays to 
 - **Setup:** your second piece is a city.
 - **Edicts:** 3 decks of 18 cards, each with its rules text in the game. Point edicts count at once.
 
-On wide screens your improvements, wardens and edicts sit in a see-through **city panel** on the left of the board (click its title to fold it); on phones they stay under the board. The **raiders' track** in the sidebar shows how close the ship is and whether the island would hold right now. Saves, loading and replays work in this mode too: the save file gains a `crowns` section with improvements, wardens, walls, capitals, the merchant, edicts and the decks. Commodities are written `Pa`, `Li` and `Si`.
+On wide screens your improvements, wardens and edicts sit in a see-through **city panel** on the left of the board (click its title to fold it); on phones they stay under the board. Everyone's level in each track shows next to their name as a colored, numbered badge (Guild yellow, Council blue, Academy green). The **raiders' track** in the sidebar shows how close the ship is and whether the island would hold right now. Saves, loading and replays work in this mode too: the save file gains a `crowns` section with improvements, wardens, walls, capitals, the merchant, edicts and the decks. Commodities are written `Pa`, `Li` and `Si`.
 
 ## Quality of life
 
+- **Modifiers** (lobby, for either mode): **🌫️ Fog** hides the island while everyone places their starting pieces; only the harbors show. The tiles and numbers aren't even dealt until the last starting road is placed, so nothing can be peeked at, then second settlements collect.
 - **Balanced maps** (lobby setting **Map**, on by default): 6 and 8, equal numbers, and 2 and 12 never touch; no corner adds up to more than 11 pips; at most 2 tiles of one resource sit together; and every resource gets a fair share of the odds. **Random** shuffles freely (only 6 and 8 kept apart). Both use the game's seed, so replays match.
 - **New map:** before anyone places a piece, the host can click **🗺️ New map**, and anyone else can **ask for a new map**. Everyone votes 👍/👎: more than half decides, and on a tie the host chooses. Rerolls are part of the history, so replays show them too.
 - **Settings suggestions:** in the lobby anyone can change a setting. For non-hosts that makes a draft they can send to the host as a suggestion. Everyone can vote 👍/👎, and the host applies or dismisses it; votes never change settings by themselves.

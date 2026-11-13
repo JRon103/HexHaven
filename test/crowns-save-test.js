@@ -15,7 +15,7 @@ for (let gi = 0; gi < GAMES; gi++) {
   const n = 2 + (gi % 7);
   const g = G.createGame('K' + gi);
   const ps = Array.from({ length: n }, (_, i) => G.addPlayer(g, 'P' + i));
-  G.act(g, ps[0].id, { type: 'settings', settings: { mode: 'crowns', turnTimer: gi % 2 ? 60 : 0, builderPhase: gi % 3 === 0, firstRaid: [7, 14][gi % 2] } });
+  G.act(g, ps[0].id, { type: 'settings', settings: { mode: 'crowns', turnTimer: gi % 2 ? 60 : 0, builderPhase: gi % 3 === 0, firstRaid: [7, 14][gi % 2], fog: gi % 3 === 1 } });
   G.act(g, ps[0].id, { type: 'start' });
   const stopAt = gi % 4 === 3 ? 30000 : 100 + Math.floor(Math.random() * 1500);
   for (let s = 0; s < stopAt && g.status === 'playing'; s++) {

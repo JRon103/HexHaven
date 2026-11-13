@@ -68,7 +68,7 @@ for (let gi = 0; gi < GAMES; gi++) {
   const n = 2 + (gi % 7);
   const g = G.createGame('T' + gi);
   const ps = Array.from({ length: n }, (_, i) => G.addPlayer(g, 'P' + i));
-  G.act(g, ps[0].id, { type: 'settings', settings: { turnTimer: gi % 2 ? 60 : 0 } });
+  G.act(g, ps[0].id, { type: 'settings', settings: { turnTimer: gi % 2 ? 60 : 0, fog: gi % 3 === 1, mapStyle: gi % 4 === 3 ? 'random' : 'balanced' } });
   G.act(g, ps[0].id, { type: 'start' });
   const stopAt = gi % 5 === 4 ? 20000 : 30 + Math.floor(Math.random() * 400); // every 5th game plays to the end
   for (let s = 0; s < stopAt && g.status === 'playing'; s++) { botStep(g); if (s === 120) G.reseed(g); }

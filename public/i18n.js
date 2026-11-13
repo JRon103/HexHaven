@@ -461,6 +461,12 @@ const ES = {
   'Tiles and numbers are shuffled freely: equal numbers can touch and a resource can end up on weak numbers.': 'Casillas y números se mezclan libremente: números iguales pueden tocarse y un recurso puede quedar con números malos.',
   'Equal numbers never touch, 2 never touches 12, no corner is too strong, at most 2 tiles of a resource together, and every resource gets a fair share of the odds.': 'Los números iguales nunca se tocan, el 2 nunca toca al 12, ninguna esquina es demasiado fuerte, como mucho 2 casillas de un recurso juntas, y cada recurso recibe una parte justa de las probabilidades.',
   'balanced': 'equilibrado', 'random': 'aleatorio', '{*} map': 'mapa {1}',
+  // ---------- modifiers ----------
+  'Modifiers': 'Modificadores', 'twists you can add to either mode': 'giros que puedes añadir a cualquier modo', '🌫️ Fog': '🌫️ Niebla', 'Fog': 'Niebla',
+  'The island starts hidden: you place your starting pieces seeing only the harbors. The tiles and numbers are dealt when the last starting road is placed, and second settlements collect then.': 'La isla empieza oculta: colocas tus piezas iniciales viendo solo los puertos. Las casillas y los números se reparten cuando se coloca el último camino inicial, y los segundos poblados cobran en ese momento.',
+  'The island is hidden until everyone has placed their starting pieces — only the harbors show.': 'La isla está oculta hasta que todos coloquen sus piezas iniciales — solo se ven los puertos.',
+  '🌫️ The fog lifts! The island is revealed.': '🌫️ ¡Se levanta la niebla! La isla queda a la vista.', 'fog {*}': 'niebla {1}',
+  '{*} ({*}) level {*} of 5': '{1} ({2}) nivel {3} de 5', 'trade': 'comercio', 'politics': 'política', 'science': 'ciencia',
   // ---------- pieces of sentences built on the page ----------
   'Rejoin room {*} as {*}': 'Volver a la sala {1} como {2}', '…or join as someone new:': '…o entra como alguien nuevo:',
   '{*} of {*} in favor ·': '{1} de {2} a favor ·', 'selected — ready': 'elegidas — listo', 'saved {*}': 'guardada {1}', 'seat {*}': 'asiento {1}', 'Seat': 'Asiento',

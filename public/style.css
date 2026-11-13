@@ -677,3 +677,18 @@ table.pts tr.mine td:first-child { font-weight: 800; }
 .cr-float .track { background: color-mix(in srgb, var(--tc) 10%, transparent); }
 /* dock: the buttons take their own full row when they can't sit comfortably next to the hand (e.g. 8 cards in Crowns) */
 @media (min-width: 901px) { .dock .actions { flex: 1 1 560px; } }
+
+/* ---------- fog modifier ---------- */
+.fog-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 110px); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+  background: #4f626b; color: #fff; padding: 7px 16px; border-radius: 99px; font-size: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.3), 0 0 0 2px rgba(255,255,255,.6); z-index: 4; }
+#g-static.reveal { animation: fog-lift 1.6s ease-out; }
+@keyframes fog-lift { from { opacity: .15; filter: blur(6px) grayscale(1); } to { opacity: 1; filter: none; } }
+html.reduce-motion #g-static.reveal { animation: none; }
+.mods-title { grid-column: 1 / -1; margin: 10px 0 0; font-family: var(--serif); font-size: 16px; }
+/* ---------- Crowns & Raiders: levels everyone can read at a glance ---------- */
+.lvchips { display: inline-flex; gap: 4px; }
+.lvchip { display: inline-flex; align-items: center; gap: 3px; padding: 0 7px 0 5px; border-radius: 99px; background: var(--tc); color: var(--tl); font-size: 12.5px; line-height: 20px; }
+.lvchip b { font-size: 13.5px; }
+.lvchip.zero { background: color-mix(in srgb, var(--tc) 22%, transparent); color: var(--ink); }
+.tr-pips .lv { height: 15px; font-size: 10.5px; font-weight: 800; display: grid; place-items: center; color: var(--muted); line-height: 1; }
+.tr-pips .lv.on { color: var(--tl, #fff); }

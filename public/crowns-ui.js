@@ -4,9 +4,9 @@
    here runs later, from app.js, and uses its helpers (S, RM, $, esc, send, render, …). */
 
 const CRT = {
-  guild:   { name: 'Guild',   com: 'linen',     ico: '⚖️', color: '#d4a21f', ink: '#5e4506', gate: 'Guild gate' },
-  council: { name: 'Council', com: 'silver',    ico: '📯', color: '#3b6fd1', ink: '#173a7a', gate: 'Council gate' },
-  academy: { name: 'Academy', com: 'parchment', ico: '🔭', color: '#2f9a58', ink: '#145430', gate: 'Academy gate' },
+  guild:   { name: 'Guild',   com: 'linen',     ico: '⚖️', color: '#d4a21f', ink: '#5e4506', gate: 'Guild gate', kind: 'trade' },
+  council: { name: 'Council', com: 'silver',    ico: '📯', color: '#3b6fd1', ink: '#173a7a', gate: 'Council gate', kind: 'politics' },
+  academy: { name: 'Academy', com: 'parchment', ico: '🔭', color: '#2f9a58', ink: '#145430', gate: 'Academy gate', kind: 'science' },
 };
 const CR_TRACKS = ['guild', 'council', 'academy'];
 const CR_EVENT = { ship: { ico: '⛵', color: '#2b2118', name: 'the raiders’ ship sails closer' } };
@@ -273,7 +273,7 @@ function crDockPanel(v, hand) {
     const capOwner = capHere !== null && v.buildings[capHere] ? v.buildings[capHere].owner : null;
     const ok = building && cities > 0 && lvl < 5 && (hand[T.com] || 0) >= cost;
     const why = lvl >= 5 ? 'Top level reached' : !cities ? 'You need a city to improve' : !building ? 'Improve on your turn (or in the builder phase)' : (hand[T.com] || 0) < cost ? `Needs ${cost} ${RM[T.com].name}` : '';
-    const pips = Array.from({ length: 5 }, (_, i) => `<span class="lv ${i < lvl ? 'on' : ''} ${i === 2 ? 'power' : ''} ${i >= 3 ? 'cap' : ''}" title="Level ${i + 1}${i === 2 ? ': unlocks the power' : i === 3 ? ': founds the capital if nobody has it' : i === 4 ? ': takes the capital from someone below 5' : ''}"></span>`).join('');
+    const pips = Array.from({ length: 5 }, (_, i) => `<span class="lv ${i < lvl ? 'on' : ''} ${i === 2 ? 'power' : ''} ${i >= 3 ? 'cap' : ''}" title="Level ${i + 1}${i === 2 ? ': unlocks the power' : i === 3 ? ': founds the capital if nobody has it' : i === 4 ? ': takes the capital from someone below 5' : ''}">${i + 1}</span>`).join('');
     const reach = lvl ? `draws an edict when the ${T.gate} opens and the red die shows 1–${lvl + 1}` : 'level 1 lets you draw edicts';
     return `<div class="track" style="--tc:${T.color};--ti:${T.ink};--tl:${k === 'guild' ? '#2b2118' : '#fff'}">
       <div class="tr-head"><span class="tr-ico">${T.ico}</span><b>${T.name}</b><span class="tr-lv">Lv ${lvl}</span>${capOwner ? `<span class="tr-cap" title="${T.name} capital: ${esc(pname(v, capOwner))}">👑${capOwner === v.me ? ' yours' : ''}</span>` : ''}</div>
@@ -355,7 +355,7 @@ window.addEventListener('resize', () => { if (S.v && S.screen === 'game' && S.v.
 // ---------- players panel ----------
 function crPlayerStats(v, p) {
   const c = p.cr;
-  return `<span title="City improvements: ${CR_TRACKS.map((k) => `${CRT[k].name} ${c.improve[k]}`).join(' · ')}">${CR_TRACKS.map((k) => `${CRT[k].ico}${c.improve[k]}`).join(' ')}</span>
+  return `<span class="lvchips">${CR_TRACKS.map((k) => `<span class="lvchip ${c.improve[k] ? '' : 'zero'}" style="--tc:${CRT[k].color};--tl:${k === 'guild' ? '#2b2118' : '#fff'}" title="${CRT[k].name} (${CRT[k].kind}) level ${c.improve[k]} of 5">${CRT[k].ico} <b>${c.improve[k]}</b></span>`).join('')}</span>
     <span title="Strength of active wardens">⚔️ ${c.strength}</span><span title="Edicts in hand">📜 ${c.edicts}</span>${c.walls ? `<span title="City walls">🧱 ${c.walls}</span>` : ''}
     ${c.capitals.map((k) => `<span class="badge award" style="background:${CRT[k].color};color:${k === 'guild' ? '#2b2118' : '#fff'}" title="${CRT[k].name} capital (+2)">👑 ${CRT[k].name}</span>`).join('')}
     ${c.defender ? `<span class="badge award" title="Defender of the Isle: +1 point each">🛡️ Defender${c.defender > 1 ? ' ×' + c.defender : ''}</span>` : ''}
