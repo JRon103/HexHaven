@@ -758,7 +758,7 @@ function renderGame(v) {
         <div class="left-stack" id="left-stack">
           <div class="trade-float" id="trade-sec" role="region" aria-label="Trade offer" hidden></div>
           <div class="map-vote" id="map-vote" role="region" aria-label="Map vote" hidden></div>
-          <div class="cr-float" id="cr-float" role="region" aria-label="Crowns and Raiders" hidden></div>
+          <div class="cr-float" id="cr-float" role="region" aria-label="Your cards" hidden></div>
         </div>
         <div class="zoomctl" role="group" aria-label="Map zoom">
           <button class="btn small" data-zoom="in" title="Zoom in (+ / mouse wheel / pinch)" aria-label="Zoom in">+</button>
@@ -1282,7 +1282,7 @@ function renderDock(v) {
       <div class="ico">${RM[r].ico}</div><div class="n">${hand[r]}</div><div class="nm">${RM[r].name}</div></div>`).join('')}</div>
     <div class="actions">${buildBtns}<span class="sep"></span>${main}</div>
     ${v.crowns && !crFloatOn() ? crDockPanel(v, hand) : ''}
-    ${scrolls ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
+    ${scrolls && !crFloatOn() ? `<div class="devcards"><div class="dc-title">Your development cards <span class="hint">· one per turn, not the turn you bought it</span></div><div class="dc-row">${scrolls}</div></div>` : ''}`;
   $('#dock').querySelectorAll('[data-build]').forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.build;
@@ -1308,9 +1308,9 @@ function renderDock(v) {
       else if (a === 'mapvote') send({ type: 'mapVote', value: 1 });
     };
   });
-  if (v.crowns) crRenderFloat(v, hand); else { const f = $('#cr-float'); if (f) f.hidden = true; }
+  if (v.crowns) crRenderFloat(v, hand); else devRenderFloat(v, scrolls, Object.values(groups).reduce((n, g) => n + g.n, 0));
   if (v.crowns) crBindDock(v);
-  $('#dock').querySelectorAll('[data-play]').forEach((b) => {
+  document.querySelectorAll('#dock [data-play], #cr-float [data-play]').forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.play;
       if (k === 'plenty' || k === 'monopoly') openModal(k);
@@ -1349,6 +1349,21 @@ function pointsRules(v) {
     r.push('🛡️ Strongest Watch: 2 points for the first to play 3 Guards, until someone plays more', '🗿 Monument card: 1 point, hidden until the end (it counts for you right away)');
   }
   return r.map((x) => `<li>${x}</li>`).join('');
+}
+
+// Classic: your development cards in the see-through panel on the left of the board (wide screens), foldable.
+const devFolded = () => { try { return localStorage.getItem('hexhaven:devpanel') === 'min'; } catch { return false; } };
+function devRenderFloat(v, scrolls, count) {
+  const f = $('#cr-float');
+  if (!f) return;
+  if (!crFloatOn() || !scrolls || v.status !== 'playing') { f.hidden = true; f.innerHTML = ''; return; }
+  f.hidden = false;
+  const folded = devFolded();
+  f.classList.toggle('folded', folded);
+  f.innerHTML = `<button class="crf-head" data-devfold aria-expanded="${!folded}" title="${folded ? 'Show' : 'Hide'} your development cards">
+      <b>📜 Your cards</b><span class="crf-sum">${count} card${count === 1 ? '' : 's'} · one per turn</span><span class="crf-chev">${folded ? '▸' : '▾'}</span></button>
+    ${folded ? '' : `<div class="devcards"><div class="dc-row">${scrolls}</div></div>`}`;
+  f.querySelector('[data-devfold]').onclick = () => { try { localStorage.setItem('hexhaven:devpanel', folded ? 'open' : 'min'); } catch {} renderDock(S.v); };
 }
 
 // ---------- side panels ----------

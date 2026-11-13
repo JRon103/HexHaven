@@ -467,6 +467,8 @@ const ES = {
   'The island is hidden until everyone has placed their starting pieces — only the harbors show.': 'La isla está oculta hasta que todos coloquen sus piezas iniciales — solo se ven los puertos.',
   '🌫️ The fog lifts! The island is revealed.': '🌫️ ¡Se levanta la niebla! La isla queda a la vista.', 'fog {*}': 'niebla {1}',
   '{*} ({*}) level {*} of 5': '{1} ({2}) nivel {3} de 5', 'trade': 'comercio', 'politics': 'política', 'science': 'ciencia',
+  '📜 Your cards': '📜 Tus cartas', '{*} cards · one per turn': '{1} cartas · una por turno', '{*} card · one per turn': '{1} carta · una por turno',
+  'Show your development cards': 'Mostrar tus cartas de desarrollo', 'Hide your development cards': 'Ocultar tus cartas de desarrollo',
   // ---------- pieces of sentences built on the page ----------
   'Rejoin room {*} as {*}': 'Volver a la sala {1} como {2}', '…or join as someone new:': '…o entra como alguien nuevo:',
   '{*} of {*} in favor ·': '{1} de {2} a favor ·', 'selected — ready': 'elegidas — listo', 'saved {*}': 'guardada {1}', 'seat {*}': 'asiento {1}', 'Seat': 'Asiento',

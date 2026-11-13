@@ -350,7 +350,7 @@ function crRenderFloat(v, hand) {
       <b>👑 Your city</b><span class="crf-sum">${lv} · 🛡️ ${me.strength} · 📜 ${me.edicts.length}</span><span class="crf-chev">${folded ? '▸' : '▾'}</span></button>
     ${folded ? '' : crDockPanel(v, hand)}`;
 }
-window.addEventListener('resize', () => { if (S.v && S.screen === 'game' && S.v.crowns) renderDock(S.v); });
+window.addEventListener('resize', () => { if (S.v && S.screen === 'game' && !S.replay) renderDock(S.v); });
 
 // ---------- players panel ----------
 function crPlayerStats(v, p) {

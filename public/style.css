@@ -692,3 +692,6 @@ html.reduce-motion #g-static.reveal { animation: none; }
 .lvchip.zero { background: color-mix(in srgb, var(--tc) 22%, transparent); color: var(--ink); }
 .tr-pips .lv { height: 15px; font-size: 10.5px; font-weight: 800; display: grid; place-items: center; color: var(--muted); line-height: 1; }
 .tr-pips .lv.on { color: var(--tl, #fff); }
+/* cards in the left panel let the map show through a little, like the rest of the panel */
+.cr-float .devcard:not(.edict) { background: linear-gradient(color-mix(in srgb, #fffaf0 84%, transparent), color-mix(in srgb, #f6ecd6 84%, transparent)); }
+.cr-float .devcard.edict { background: linear-gradient(color-mix(in srgb, color-mix(in srgb, var(--tc) 14%, #fffaf0) 84%, transparent), color-mix(in srgb, #f6ecd6 84%, transparent)); }
