@@ -479,6 +479,9 @@ function resetToLobby(game) {
     'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history', 'cr']) delete game[k];
   for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces', 'seat', 'cr']) delete p[k];
   game.status = 'lobby';
+  // a fresh chat for the next game: the last game's log and chat would only clutter the lobby
+  // (ids keep counting up, so open pages redraw the log)
+  game.log = [];
   log(game, 'Back in the lobby — the host can start a new game.');
 }
 
