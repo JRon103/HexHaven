@@ -105,7 +105,7 @@ On wide screens your improvements, wardens and edicts sit in a see-through **cit
 - **Rolling a 7:** the dice turn red, the board flashes, and a red banner stays up until discards, the bandit move and the steal are done. When discarding you can only pick exactly the number of cards you owe.
 - **Robbing:** after moving the bandit you pick one of the victim's face-down cards. It flips over to show what you took, and only you and the victim see what it was.
 - **Español / English:** the 🌐 button (top bar, home page and lobby) switches the language; the first visit follows the device language. Each player picks their own: the game log, messages and every screen are shown in that player's language, while saves and replays stay the same for everyone. Translations live in `public/i18n.js` (English text → Spanish, with `{*}` for names and numbers).
-- **Light / dark theme:** the game follows your device; the 🌙 / ☀️ button in the top bar switches it, and that choice is remembered on that device.
+- **Light / dark theme:** the game follows your device; the 🌙 / ☀️ button (top bar, home page and lobby) switches it, and that choice is remembered on that device.
 - Every roll shows two 3D dice thrown onto the board. Animations are on by default; the ✨ button in the top bar turns them off (or back on) for that device. The log shows each player's color and icons for the cards they got. New pieces drop in, and the bandit slides to its new tile.
 - **Shortcuts:** `+` / `-` / `0` zoom · `R` roll · `E` end turn / done building · `T` trade · `B` bank · `1`–`4` road / settlement / city / development card (in Crowns & Raiders `4` wall, `5` warden) · `Esc` cancel.
 

@@ -177,7 +177,7 @@ function renderHome(prefill = '') {
       <div class="hero-text">
         <h1>Hexhaven</h1>
         <p>Settle a hex island, trade with your friends, race to 10 points.</p>
-        <div class="hero-tags"><span>👥 2–8 players</span><span>✨ No sign-up</span><span>🌐 Play in the browser</span>${langButton('btn small hero-lang')}</div>
+        <div class="hero-tags"><span>👥 2–8 players</span><span>✨ No sign-up</span><span>🌐 Play in the browser</span>${langButton('btn small hero-lang')}${themeToggle('btn small hero-lang')}</div>
       </div>
     </div>
     <div class="home-grid">
@@ -262,7 +262,7 @@ function soundOn() { try { return localStorage.getItem('hexhaven:mute') !== '1';
 // Animations are on by default; the ✨ button in the top bar turns them off (or back on) and the choice is
 // stored per device. CSS reads the result as html.reduce-motion.
 // ---------- light / dark theme ----------
-// Follows the device until the player picks one with the top-bar button; the choice is remembered on this device.
+// Follows the device until the player picks one with a 🌙/☀️ button (top bar, home page, lobby); remembered per device.
 const darkDevice = () => !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
 const themeNow = () => document.documentElement.dataset.theme || (darkDevice() ? 'dark' : 'light');
 function setTheme(t) {
@@ -270,14 +270,22 @@ function setTheme(t) {
   try { localStorage.setItem('hexhaven:theme', t); } catch {}
   themeButton();
 }
+// Every theme button on the page shows what clicking it switches to.
 function themeButton() {
-  const b = $('#theme');
-  if (!b) return;
   const dark = themeNow() === 'dark';
-  b.textContent = dark ? '☀️' : '🌙';
-  b.title = dark ? 'Switch to the light theme' : 'Switch to the dark theme';
-  b.setAttribute('aria-label', b.title);
+  document.querySelectorAll('[data-theme-toggle]').forEach((b) => {
+    b.textContent = dark ? '☀️' : '🌙';
+    b.title = dark ? 'Switch to the light theme' : 'Switch to the dark theme';
+    b.setAttribute('aria-label', b.title);
+  });
 }
+const themeToggle = (cls = 'btn small') => {
+  const dark = themeNow() === 'dark'; const t = dark ? 'Switch to the light theme' : 'Switch to the dark theme';
+  return `<button type="button" class="${cls} themebtn" data-theme-toggle title="${t}" aria-label="${t}">${dark ? '☀️' : '🌙'}</button>`;
+};
+document.addEventListener('click', (e) => {
+  if (e.target.closest && e.target.closest('[data-theme-toggle]')) setTheme(themeNow() === 'dark' ? 'light' : 'dark');
+});
 if (window.matchMedia) { try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeButton); } catch {} }
 
 function motionOn() { try { return localStorage.getItem('hexhaven:motion') !== 'off'; } catch { return true; } }
@@ -476,7 +484,7 @@ function renderLobby(v) {
     <div class="lobby">
       <div class="lobby-head">
         <div><div class="lobby-label">${LOGO_SVG}Room code</div><div class="room-code" aria-label="Room code ${esc(v.code)}">${[...v.code].map((ch) => `<span>${esc(ch)}</span>`).join('')}</div></div>
-        <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button>${langButton('btn')}</div>
+        <div class="invite"><code id="invite-url"></code><button class="btn" id="copy">Copy invite link</button>${langButton('btn')}${themeToggle('btn')}</div>
       </div>
       <div class="card"><div id="lobby-main"></div></div>
       <div class="card" style="display:flex;flex-direction:column;min-height:320px">
@@ -744,7 +752,7 @@ function renderGame(v) {
         <div class="dice" id="dice"></div>
         <button class="btn small" id="savebtn" title="Download this game as a save file" hidden>💾 Save</button>
         ${langButton()}
-        <button class="btn small" id="theme"></button>
+        ${themeToggle()}
         <button class="btn small" id="motion" aria-label="Animations">✨</button>
         <button class="btn small" id="mute" title="Sound on/off"></button>
       </header>
@@ -799,7 +807,6 @@ function renderGame(v) {
       toast(motionOn() ? '✨ Animations on' : 'Animations off');
     };
     applyMotion();
-    $('#theme').onclick = () => setTheme(themeNow() === 'dark' ? 'light' : 'dark');
     themeButton();
     bindChat();
   }
