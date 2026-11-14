@@ -487,6 +487,9 @@ const ES = {
   'Collected {*} of the {*} {*} the dice gave out ({*})': 'Juntó {1} de los {2} de {3} que dieron los dados ({4})',
   'Bandit Magnet': 'Imán de Bandidos', 'Robbed {*} times': 'Le robaron {1} veces', 'Thief': 'Ladrón', 'Stole {*} cards': 'Robó {1} cartas',
   'Under Siege': 'Bajo Asedio', 'Lost {*} cards to the bandit sitting on their tiles': 'Perdió {1} cartas por el bandido en sus casillas',
+  '🏁 End': '🏁 Terminar', 'End the game for everyone and go back to the lobby': 'Terminar la partida para todos y volver a la sala',
+  "End this game for everyone and go back to the lobby? It can't be resumed — click 💾 Save first if you want to keep it.": '¿Terminar esta partida para todos y volver a la sala? No se puede retomar — haz clic en 💾 Guardar primero si quieres conservarla.',
+  '🏁 {*} ended the game early.': '🏁 {1} terminó la partida antes de tiempo.', 'The game is over': 'La partida terminó',
   // ---------- pieces of sentences built on the page ----------
   'Rejoin room {*} as {*}': 'Volver a la sala {1} como {2}', '…or join as someone new:': '…o entra como alguien nuevo:',
   '{*} of {*} in favor ·': '{1} de {2} a favor ·', 'selected — ready': 'elegidas — listo', 'saved {*}': 'guardada {1}', 'seat {*}': 'asiento {1}', 'Seat': 'Asiento',

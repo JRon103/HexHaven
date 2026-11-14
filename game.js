@@ -775,6 +775,14 @@ function actInner(game, pid, a) {
     if (pid !== game.hostId) fail('Only the host can do that');
     resetToLobby(game); return bump(game);
   }
+  // the host stops a game early: everyone goes back to the lobby (the game can't be resumed, unless saved first)
+  if (a.type === 'endGame') {
+    if (pid !== game.hostId) fail('Only the host can do that');
+    if (game.status !== 'playing') fail('The game is over');
+    resetToLobby(game);
+    log(game, `🏁 ${p.name} ended the game early.`);
+    return bump(game);
+  }
   if (game.status === 'over') fail('The game is over');
 
   const t = game.turn;

@@ -751,6 +751,7 @@ function renderGame(v) {
         <span class="timer" id="timer" hidden title="Time left before the game auto-plays"></span>
         <div class="dice" id="dice"></div>
         <button class="btn small" id="savebtn" title="Download this game as a save file" hidden>💾 Save</button>
+        <button class="btn small" id="endbtn" title="End the game for everyone and go back to the lobby" hidden>🏁 End</button>
         ${langButton()}
         ${themeToggle()}
         <button class="btn small" id="motion" aria-label="Animations">✨</button>
@@ -791,6 +792,9 @@ function renderGame(v) {
     </div>`;
     $('#roomtag').onclick = () => { if (!S.replay) copyInvite(); };
     $('#savebtn').onclick = downloadSave;
+    $('#endbtn').onclick = () => {
+      if (confirm("End this game for everyone and go back to the lobby? It can't be resumed — click 💾 Save first if you want to keep it.")) send({ type: 'endGame' });
+    };
     $('#stats-more').onclick = () => openModal('dice');
     $('#pts-more').onclick = () => openModal('points');
     $('#board').addEventListener('click', onBoardClick);
@@ -816,6 +820,7 @@ function renderGame(v) {
   renderBoardDyn(v);
   if (S.replay) renderReplayBar(v); else renderDock(v);
   $('#savebtn').hidden = !!S.replay || !canSave(v);
+  $('#endbtn').hidden = !!S.replay || v.status !== 'playing' || v.hostId !== v.me;
   $('#chat').hidden = !!S.replay;
   renderPlayers(v);
   renderTrade(v);

@@ -97,6 +97,7 @@ On wide screens your improvements, wardens and edicts sit in a see-through **cit
 
 - **Turn timer** (optional, 1–3 minutes): when time runs out the game plays for you. It rolls, discards at random, moves the bandit, or ends the turn. Short steps like discarding get at most 1 minute.
 - **Friendly bandit** (optional): the bandit can't be placed next to players with 2 or fewer points.
+- **Ending early:** the host can click **🏁 End** in the top bar to stop the game and send everyone back to the lobby (it asks first; save the game before if you want to keep it).
 - **Lost your seat?** Join the room with the exact same name and you'll get it back, as long as that seat is offline.
 - **Host left?** Anyone can click *become host* while the host is offline. The host can **Skip** an AFK player, and anyone can skip a player who is offline.
 - A chime plays when it's your move or a trade offer arrives (🔔 toggles it). A toast shows the cards you just got, and newly built pieces glow briefly.
