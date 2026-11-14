@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { encodeMove, CROWNS_MOVES } = require('./notation');
 const CR = require('./crowns');
+const ST = require('./stats');
 
 const RES = ['wood', 'clay', 'fleece', 'wheat', 'iron'];
 const COM = CR.COM; // commodities (Crowns & Raiders only): parchment, linen, silver
@@ -306,6 +307,7 @@ function startGame(game) {
   }
   game.board = buildBoard(cfg, game.settings.mapStyle, !!game.settings.fog);
   game.fogPayouts = [];
+  delete game.stats;
   game.bank = emptyHand(); for (const r of RES) game.bank[r] = cfg.bank;
   if (game.settings.mode === 'crowns') CR.setup(game, cfg); else delete game.cr;
   game.deck = [];
@@ -476,7 +478,7 @@ function orderRoll(game, p) {
 
 function resetToLobby(game) {
   for (const k of ['board', 'bank', 'deck', 'bandit', 'buildings', 'roads', 'longestHolder', 'armyHolder',
-    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history', 'cr']) delete game[k];
+    'pendingDiscard', 'trade', 'winner', 'turn', 'rollStats', 'rollHistory', 'produced', 'order', 'lastRoll', 'rollSeq', 'lastSteal', 'history', 'cr', 'stats']) delete game[k];
   for (const p of game.players) for (const k of ['hand', 'scrolls', 'guards', 'roadLen', 'pieces', 'seat', 'cr']) delete p[k];
   game.status = 'lobby';
   // a fresh chat for the next game: the last game's log and chat would only clutter the lobby
@@ -621,6 +623,7 @@ function produce(game, sum) {
       (got[pid] = got[pid] || {})[r] = n;
     }
   }
+  ST.onHarvest(game, got);
   const parts = Object.entries(got).map(([pid, c]) => `${P(game, pid).name}: ${fmtRes(c)}`);
   log(game, parts.length ? `Harvest — ${parts.join(' · ')}` : 'Nobody harvests anything.', null, { type: 'harvest', gains: got });
   if (crowns) CR.afterHarvest(game, got);
@@ -636,6 +639,7 @@ function stealFrom(game, thief, victim, pickIndex) {
   const r = cards[i];
   game.lastSteal = { id: (game.lastSteal ? game.lastSteal.id : 0) + 1, thief: thief.id, victim: victim.id, res: r };
   victim.hand[r]--; thief.hand[r]++;
+  ST.onSteal(game, thief.id, victim.id);
   log(game, `🥷 ${thief.name} stole a card from ${victim.name}.`);
   log(game, `You stole 1 ${RES_NAME[r]} from ${victim.name}.`, thief.id);
   log(game, `${thief.name} stole 1 ${RES_NAME[r]} from you.`, victim.id);
@@ -734,6 +738,7 @@ function act(game, pid, a) {
   let line = null;
   if (record) { try { line = encodeMove(game, pid, a); } catch { /* malformed input: the rules below reject it */ } }
   const result = withRng(game, () => actInner(game, pid, a));
+  if (top && game.turn && game.turn.number >= 1 && game.status !== 'lobby') ST.onScore(game, Object.fromEntries(game.players.map((p) => [p.id, vp(game, p, true)])));
   if (line) game.history.moves.push(line);
   return result;
 }
@@ -797,6 +802,7 @@ function actInner(game, pid, a) {
       t.dice = [d1, d2]; game.rollStats[sum]++;
       (game.rollHistory = game.rollHistory || []).push({ n: sum, d: [d1, d2], by: pid, turn: t.number });
       log(game, `🎲 ${p.name} rolled ${sum} (${d1}+${d2}).`);
+      ST.onRoll(game, sum);
       // crowns: the event die first (raiders advance or a gate hands out edicts); a raid may need choices first
       if (CR.on(game) && CR.rollEvent(game, p, d2, sum)) break;
       afterRoll(game, sum);
@@ -978,17 +984,18 @@ function actInner(game, pid, a) {
       } else { give = parseCards(a.give); get = parseCards(a.get); }
       if (!handCount(give) || !handCount(get)) fail('Choose what to give and what to take');
       if (CARDS.some((r) => give[r] && get[r])) fail("Don't put the same card on both sides");
-      let lots = 0;
+      let lots = 0; const lotRates = [];
       for (const r of CARDS) {
         if (!give[r]) continue;
         const k = rate(game, pid, r);
         if (give[r] % k) fail(`${RES_NAME[r]} trades in groups of ${k}`);
-        lots += give[r] / k;
+        lots += give[r] / k; lotRates.push({ rate: k, n: give[r] / k });
       }
       if (handCount(get) !== lots) fail(`That gives you ${lots} card${lots === 1 ? '' : 's'} to take — you picked ${handCount(get)}`);
       if (!hasRes(p.hand, give)) fail("You don't have those cards");
       for (const r of CARDS) if (get[r] > (game.bank[r] || 0)) fail(`The bank only has ${game.bank[r] || 0} ${RES_NAME[r]}`);
       move(p.hand, game.bank, give); move(game.bank, p.hand, get);
+      ST.onBankTrade(game, pid, lotRates);
       log(game, `🏦 ${p.name} traded ${fmtRes(give)} to the bank for ${fmtRes(get)}.`);
       break;
     }
@@ -1034,6 +1041,7 @@ function actInner(game, pid, a) {
       if (!hasRes(p.hand, give)) fail("You don't have the cards for that trade");
       if (!hasRes(o.hand, get)) fail(`${o.name} no longer has those cards`);
       move(p.hand, o.hand, give); move(o.hand, p.hand, get);
+      ST.onPlayerTrade(game, pid, o.id);
       log(game, `🤝 ${p.name} traded ${fmtRes(give)} with ${o.name} for ${fmtRes(get)}.`);
       game.trade = null;
       break;
@@ -1347,6 +1355,7 @@ function viewFor(game, pid) {
     },
     pendingDiscard: game.pendingDiscard, trade: game.trade,
     fog: isFogged(game),
+    stats: ST.publicStats(game), tags: game.status === 'over' ? ST.tags(game) : null,
     map: { canReroll: canRerollMap(game), seq: game.mapSeq || 0, vote: game.mapVote && canRerollMap(game) ? { ...game.mapVote, ...mapTally(game) } : null }, stalled: game.status === 'playing' ? stalledPlayers(game) : [],
     order: game.order ? { contenders: game.order.contenders, rolls: game.order.rolls, round: game.order.round } : null,
     lastRoll: game.lastRoll || null,

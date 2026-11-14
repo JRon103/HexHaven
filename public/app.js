@@ -1481,6 +1481,21 @@ function renderMapVote(v) {
   });
 }
 
+// ---------- titles & per-player stats ----------
+function statCells(v, pid) {
+  const s = (v.stats || {})[pid];
+  if (!s) return '<td>—</td><td>—</td><td>—</td>';
+  const luck = s.luck === null ? '—' : `<span class="${s.luck >= 115 ? 'up' : s.luck <= 85 ? 'down' : ''}" title="${s.harvested} cards where ${s.expected} were expected">${s.luck}%</span>`;
+  return `<td>${luck}</td><td>${s.robbed}</td><td title="${s.blockedRolls} roll${s.blockedRolls === 1 ? '' : 's'}">${s.blocked}</td>`;
+}
+// End-of-game titles ("behavior tags"), one row per player.
+function titlesHtml(v, ranked) {
+  if (!v.tags) return '';
+  const rows = ranked.filter((p) => (v.tags[p.id] || []).length).map((p) => `<div class="title-row">${chip(p.color)}<b>${esc(p.name)}</b>
+    <span class="title-chips">${v.tags[p.id].map((t) => `<span class="title-chip" title="${esc(t.desc)}">${t.ico} ${esc(t.label)}<small>${esc(t.desc)}</small></span>`).join('')}</span></div>`);
+  return rows.length ? `<h3 class="titles-head">🏷️ Titles</h3><div class="titles">${rows.join('')}</div>` : '';
+}
+
 // ---------- dice statistics ----------
 const NUMS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const WAYS = (n) => 6 - Math.abs(7 - n); // ways to roll n with two dice, out of 36
@@ -1541,13 +1556,14 @@ function diceModal(v) {
     const mineRolls = st.hist.filter((r) => r.by === p.id);
     const avg = mineRolls.length ? (mineRolls.reduce((s, r) => s + r.n, 0) / mineRolls.length).toFixed(1) : '—';
     return `<tr><td>${chip(p.color)} ${esc(p.name)}</td><td>${mineRolls.length}</td><td>${avg}</td>
-      <td>${mineRolls.filter((r) => r.n === 7).length}</td><td><b>${(v.produced || {})[p.id] || 0}</b></td></tr>`;
+      <td>${mineRolls.filter((r) => r.n === 7).length}</td><td><b>${(v.produced || {})[p.id] || 0}</b></td>
+      ${statCells(v, p.id)}</tr>`;
   }).join('');
   return `<h2>🎲 Dice statistics</h2>
     <p class="hint" style="margin:0">${st.total} rolls so far. "Expected" is how often each number should come up with fair dice. ★ marks numbers your buildings sit on.</p>
     <table class="stat-table"><thead><tr><th>Roll</th><th>Times</th><th>Expected</th><th>±</th><th>Share / odds</th><th>Last seen</th></tr></thead><tbody>${rows}</tbody></table>
     <h3 style="font-size:16px">By player</h3>
-    <table class="stat-table"><thead><tr><th>Player</th><th>Rolls</th><th>Avg</th><th>7s</th><th title="Cards collected from dice rolls">Harvested</th></tr></thead><tbody>${people}</tbody></table>
+    <table class="stat-table"><thead><tr><th>Player</th><th>Rolls</th><th>Avg</th><th>7s</th><th title="Cards collected from dice rolls">Harvested</th><th title="Cards the dice gave compared with what your tiles should give on average (100% = exactly average)">🍀 Luck</th><th title="Times a card was stolen from you">🥷 Robbed</th><th title="Cards you lost because the bandit sat on your tile when its number was rolled">🚧 Bandit kept</th></tr></thead><tbody>${people}</tbody></table>
     <div class="foot"><button class="btn" data-do="close">Close</button></div>`;
 }
 
@@ -1704,6 +1720,7 @@ function renderModal(v) {
     const ranked = v.players.slice().sort((a, b) => (b.vpTotal || 0) - (a.vpTotal || 0));
     html = `<h2>🏆 ${esc(pname(v, v.winner))} wins!</h2>
       ${pointsTable(v, ranked)}
+      ${titlesHtml(v, ranked)}
       <div class="foot" style="justify-content:flex-start">
         <button class="btn" data-do="replay">▶ Watch replay</button>
         <button class="btn" data-do="dicestats">🎲 Dice stats</button>
@@ -1822,7 +1839,7 @@ document.addEventListener('keydown', (e) => {
 async function loadEngine() {
   if (S.engine) return S.engine;
   const v = encodeURIComponent((S.build && S.build.commit) || '');
-  const files = ['notation', 'crowns', 'game', 'save'];
+  const files = ['notation', 'crowns', 'stats', 'game', 'save'];
   const srcs = await Promise.all(files.map((f) => fetch(`/lib/${f}.js?v=${v}`).then((r) => {
     if (!r.ok) throw new Error('Could not load the replay engine');
     return r.text();

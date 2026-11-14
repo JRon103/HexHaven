@@ -81,6 +81,9 @@ for (let gi = 0; gi < GAMES; gi++) {
   check(meaning(loaded) === meaning(g), `${label}: loaded game differs`);
   check(notes[0].startsWith('Kept the full history'), `${label}: history not kept (${notes.join(' ')})`);
   check(loaded.rng.s === g.rng.s, `${label}: seed not restored`);
+  // stats and titles come back from the history (matched by seat)
+  const titles = (game) => { const v = G.viewFor(game, game.players[0].id); return JSON.stringify(game.players.slice().sort((x, y) => x.seat - y.seat).map((p) => [v.stats[p.id], v.tags && v.tags[p.id]])); };
+  check(titles(loaded) === titles(g), `${label}: stats or titles differ after loading`);
   for (let s = 0; s < 60 && loaded.status === 'playing'; s++) botStep(loaded);
 
   // 2) replay reproduces the live game exactly, and any point in between is a valid game

@@ -205,6 +205,7 @@ const STATIC = {
   // the rules, notation and save code, so the browser's replay viewer runs the real engine
   '/lib/notation.js': ['../notation.js', 'text/javascript; charset=utf-8'],
   '/lib/crowns.js': ['../crowns.js', 'text/javascript; charset=utf-8'],
+  '/lib/stats.js': ['../stats.js', 'text/javascript; charset=utf-8'],
   '/lib/game.js': ['../game.js', 'text/javascript; charset=utf-8'],
   '/lib/save.js': ['../save.js', 'text/javascript; charset=utf-8'],
 };

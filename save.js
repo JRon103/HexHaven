@@ -5,6 +5,7 @@
 const crypto = require('crypto');
 const G = require('./game');
 const CR = require('./crowns');
+const ST = require('./stats');
 const { RES, TILE, TILE_BACK, geometry, cards, uncards, decodeMove } = require('./notation');
 
 const FORMAT = 1;
@@ -326,6 +327,11 @@ function importSave(file, code) {
     const startGame = historyStartGame(file);
     startGame.code = code;
     game.history = { start: G.historyStart(startGame), moves: [...file.history.moves] };
+    // the stats (and end-of-game titles) come back from the history; the replay's players have other ids
+    if (replayed.stats) {
+      const idMap = Object.fromEntries(replayed.players.map((p) => [p.id, game.players.find((q) => q.seat === p.seat).id]));
+      game.stats = ST.remap(clone(replayed.stats), idMap);
+    }
     game.rng = { s: replayed.rng.s };
     if (isSeed(file.seed)) { if ((Number(file.seed) >>> 0) !== game.rng.s) G.reseed(game, Number(file.seed)); notes.push('Kept the full history — the replay still works.'); }
     else { G.reseed(game); notes.push('Kept the full history. "seed" was empty, so the dice are freshly random from here.'); }

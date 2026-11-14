@@ -695,3 +695,13 @@ html.reduce-motion #g-static.reveal { animation: none; }
 /* cards in the left panel let the map show through a little, like the rest of the panel */
 .cr-float .devcard:not(.edict) { background: linear-gradient(color-mix(in srgb, #fffaf0 84%, transparent), color-mix(in srgb, #f6ecd6 84%, transparent)); }
 .cr-float .devcard.edict { background: linear-gradient(color-mix(in srgb, color-mix(in srgb, var(--tc) 14%, #fffaf0) 84%, transparent), color-mix(in srgb, #f6ecd6 84%, transparent)); }
+
+/* end-of-game titles */
+.titles-head { font-size: 16px; margin-top: 8px; }
+.titles { display: grid; gap: 6px; }
+.title-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.title-row > b { min-width: 70px; padding-top: 3px; }
+.title-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.title-chip { display: inline-flex; flex-direction: column; padding: 4px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-weight: 800; font-size: 13.5px; }
+.title-chip small { font-weight: 600; font-size: 11.5px; color: var(--muted); max-width: 260px; }
+.stat-table .up { color: var(--good); font-weight: 700; }
